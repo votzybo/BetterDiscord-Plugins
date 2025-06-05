@@ -8,7 +8,7 @@ Welcome to my personal collection of custom BetterDiscord plugins! These plugins
 
 | Plugin Name         | Description                                                                                                      | Download |
 |---------------------|------------------------------------------------------------------------------------------------------------------|----------|
-| **AtSomeone**        | Modern @someone roulette: floating, animated, customizable pill above chat with sound effects and full settings. | [Download](https://votzybo.github.io/BetterDiscord-Plugins/AtSomeone.plugin.js) |
+| **AtSomeone**        | Modern @someone roulette: floating, animated, customizable pill above chat with sound effects and full settings. | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/AtSomeone.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/fd99ab387bf78b0ca68b04060c208b632c2719ce/AtSomeone/AtSomeone.plugin.js)) |
 | **EditChatButtons**  | Lets you selectively remove Discord chatbar buttons (Gift, GIF, Sticker, Game) and control button spacing.        | [Download](https://votzybo.github.io/BetterDiscord-Plugins/EditChatButtons.plugin.js) |
 | **NotificationQuickReply** | In-app notifications for messages, with quick reply, actions, and slick UI. Customizable and powerful.     | [Download](https://votzybo.github.io/BetterDiscord-Plugins/NotificationQuickReply.plugin.js) |
 | **SpotifyLyrics**    | Sidebar lyrics panel with multiple views (Expand, Large, Custom). Needs SpotifyControls plugin.                   | [Download](https://votzybo.github.io/BetterDiscord-Plugins/SpotifyLyrics.plugin.js) |
