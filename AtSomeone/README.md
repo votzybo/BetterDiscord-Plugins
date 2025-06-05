@@ -2,6 +2,8 @@
 
 Modern @someone roulette: floating, animated, customizable pill above the chat, with sound effects, avatars, and a full settings UI.
 
+## ⭐ Preview
+
 ## ✨ Features
 
 - Floating animated "@someone" pill
