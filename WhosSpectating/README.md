@@ -2,6 +2,13 @@
 
 See who’s watching your screenshare, with clean layout and fake-user testing tools.
 
+## ⭐ Preview Settings
+![Image](https://github.com/user-attachments/assets/c33ffe25-c7de-4f8f-8c4c-c6aa305eac9e)
+
+## 💫 Preview
+![Image](https://github.com/user-attachments/assets/20dbf079-aeb5-44c6-9733-37509bc4fe4e)
+![Image](https://github.com/user-attachments/assets/21dfd5b6-2b65-46f8-8c2e-c8f55685363d)
+
 ## ✨ Features
 
 - Displays spectators above call bar
