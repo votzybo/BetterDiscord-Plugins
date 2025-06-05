@@ -8,11 +8,11 @@ Welcome to my personal collection of custom BetterDiscord plugins! These plugins
 
 | Plugin Name         | Description                                                                                                      | Download |
 |---------------------|------------------------------------------------------------------------------------------------------------------|----------|
-| **AtSomeone**        | Modern @someone roulette: floating, animated, customizable pill above chat with sound effects and full settings. | [Download](https://votzybo.github.io/BetterDiscord-Plugins/AtSomeone.plugin.js) |
-| **EditChatButtons**  | Lets you selectively remove Discord chatbar buttons (Gift, GIF, Sticker, Game) and control button spacing.        | [Download](https://votzybo.github.io/BetterDiscord-Plugins/EditChatButtons.plugin.js) |
-| **NotificationQuickReply** | In-app notifications for messages, with quick reply, actions, and slick UI. Customizable and powerful.     | [Download](https://votzybo.github.io/BetterDiscord-Plugins/NotificationQuickReply.plugin.js) |
-| **SpotifyLyrics**    | Sidebar lyrics panel with multiple views (Expand, Large, Custom). Needs SpotifyControls plugin.                   | [Download](https://votzybo.github.io/BetterDiscord-Plugins/SpotifyLyrics.plugin.js) |
-| **WhosSpectating**   | Shows who is watching your screenshare above your call info. Supports fake users, toggles, and wrap-around UI.   | [Download](https://votzybo.github.io/BetterDiscord-Plugins/WhosSpectating.plugin.js) |
+| **AtSomeone**        | Modern @someone roulette: floating, animated, customizable pill above chat with sound effects and full settings. | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/AtSomeone.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/main/AtSomeone/AtSomeone.plugin.js)) |
+| **EditChatButtons**  | Lets you selectively remove Discord chatbar buttons (Gift, GIF, Sticker, Game) and control button spacing.        | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/EditChatButtons.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/main/EditChatButtons/EditChatButtons.plugin.js)) |
+| **NotificationQuickReply** | In-app notifications for messages, with quick reply, actions, and slick UI. Customizable and powerful.     | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/NotificationQuickReply.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/main/NotificationQuickReply/NotificationQuickReply.plugin.js)) |
+| **SpotifyLyrics**    | Sidebar lyrics panel with multiple views (Expand, Large, Custom). Needs SpotifyControls plugin.                   | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/SpotifyLyrics.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/main/Spotify-Lyrics/Spotify-Lyrics.plugin.js)) |
+| **WhosSpectating**   | Shows who is watching your screenshare above your call info. Supports fake users, toggles, and wrap-around UI.   | [Download]([https://votzybo.github.io/BetterDiscord-Plugins/WhosSpectating.plugin.js](https://github.com/votzybo/BetterDiscord-Plugins/blob/main/WhosSpectating/WhosSpectating.plugin.js)) |
 
 ---
 
