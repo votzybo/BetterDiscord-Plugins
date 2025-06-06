@@ -6,7 +6,7 @@
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
- * @updateurl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/main/NotificationQuickReply.plugin.js
+ * @updateurl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/NotificationQuickReply/NotificationQuickReply.plugin.js
  */
 
 const { React, Webpack, ReactDOM, UI } = BdApi;
