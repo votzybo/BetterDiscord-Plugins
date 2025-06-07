@@ -1,15 +1,15 @@
 /**
  * @name NotificationQuickReply
  * @author votzybo
- * @version 9.7.3-autosize-modernsettings
- * @description In-app notifications for messages/mentions/keywords, with quick reply, quick actions, modern header, visible timer, improved spacing, and a slick, modern settings GUI. Notification height auto-expands to fit message. Progress bar, error handling, scrollable quick panel. Settings allow control of duration, timer, size, position, and more. Notification closes automatically after sending a quick reply.
+ * @version 9.7.6-portal-quickactions
+ * @description In-app notifications for messages/mentions/keywords, with quick reply, quick actions, modern header, visible timer, improved spacing, and a slick, modern settings GUI. Notification height auto-expands to fit message. Progress bar, error handling, scrollable quick panel. Settings allow control of duration, timer, size, position, and more. Notification closes automatically after sending a quick reply. Now correctly displays group DM chat names! Quick Actions menu pops downward, stays open on hover, and is no longer clipped by the notification.
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
  * @updateurl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/AtSomeoneRoullette/AtSomeoneRoullette.plugin.js
  */
 
-// ------------------ COMPONENTS FIRST: ProgressBar, NotificationComponent, ModernSwitch, ModernSlider, ModernSelect, ModernSettingsPanel, VotzyboSettingsPanel -----------------
+// [COMPONENTS: ProgressBar, ModernSwitch, ModernSlider, ModernSelect, ModernSettingsPanel, VotzyboSettingsPanel]
 
 function ProgressBar({ duration, isPaused, onComplete, showTimer, setHeaderTimer }) {
     const [remainingTime, setRemainingTime] = React.useState(duration);
@@ -175,6 +175,7 @@ function addMessage(message) {
     ChannelConstructor.commit(newChannel);
 }
 
+// --- NotificationComponent with Group DM and improved Quick Actions hover ---
 function NotificationComponent({
     message:propMessage, channel, settings,
     votzyboQuickReplyEnabled = true,
@@ -203,23 +204,32 @@ function NotificationComponent({
     message = message ? message : oldMsg.current.message;
 
     if (!channel) return null;
-    
+
     const guild = channel.guild_id ? GuildStore.getGuild(channel.guild_id) : null;
+
+    // --- Group/DM/Server detection ---
+    const isGuild = !!channel.guild_id;
+    const isGroupDM = channel.type === 3;
+    const isDM = channel.type === 1;
 
     const [isPaused, setIsPaused] = React.useState(false);
     const [headerTimer, setHeaderTimer] = React.useState(settings.duration);
 
-    // Quick Reply/Actions logic
+    // --- Quick Reply/Actions logic with improved hover ---
     const [replyHovered, setReplyHovered] = React.useState(false);
     const [replyFocused, setReplyFocused] = React.useState(false);
     const [replyValue, setReplyValue] = React.useState("");
     const [sending, setSending] = React.useState(false);
-    const [quickActionsExpanded, setQuickActionsExpanded] = React.useState(false);
+    const [quickActionsHover, setQuickActionsHover] = React.useState(false);
     const [showQuickActionPill, setShowQuickActionPill] = React.useState(() =>
         !BdApi.Data.load('PingNotification', "votzybo_quickactions_tooltip_shown")
     );
     const [errorBanner, setErrorBanner] = React.useState("");
     const replyRef = React.useRef(null);
+
+    // For portal positioning:
+    const [quickActionsMenuPos, setQuickActionsMenuPos] = React.useState(null);
+    const quickActionBtnRef = React.useRef(null);
 
     function dismissQuickActionPill() {
         setShowQuickActionPill(false);
@@ -260,7 +270,7 @@ function NotificationComponent({
     }
     function handleQuickAction(action) {
         setReplyValue(v => v + (v && !v.endsWith(" ") ? " " : "") + action);
-        setQuickActionsExpanded(false);
+        setQuickActionsHover(false);
         if (replyRef.current) replyRef.current.focus();
     }
 
@@ -272,6 +282,27 @@ function NotificationComponent({
     );
     const getDynamicScale = (scale) => 1 + (Math.log1p(scale - 1) * 0.5);
     const dynamicScale = getDynamicScale(scaleFactor);
+
+    // Helper for menu hide delay
+    const quickActionsTimeoutRef = React.useRef();
+    const safeSetQuickActionsHover = (hover) => {
+        if (quickActionsTimeoutRef.current) clearTimeout(quickActionsTimeoutRef.current);
+        if (hover) {
+            setQuickActionsHover(true);
+        } else {
+            quickActionsTimeoutRef.current = setTimeout(() => setQuickActionsHover(false), 110);
+        }
+    };
+
+    // QuickActions Portal
+    React.useEffect(() => {
+        if (!quickActionsHover) setQuickActionsMenuPos(null);
+    }, [quickActionsHover]);
+
+    // Cleanup portal timeout on unmount
+    React.useEffect(() => () => {
+        if (quickActionsTimeoutRef.current) clearTimeout(quickActionsTimeoutRef.current);
+    }, []);
 
     return React.createElement('div', {
         className: `ping-notification-content`,
@@ -317,7 +348,7 @@ function NotificationComponent({
             '--ping-notification-content-font-size': `${Math.round(14 * dynamicScale)}px`
         }
     },
-        // Header
+        // Header with group DM logic
         React.createElement('div', { 
             className: "ping-notification-header",
             style: {
@@ -340,21 +371,24 @@ function NotificationComponent({
                     color: 'var(--brand-experiment)'
                 }
             },
-                channel.guild_id
-                    ? [
-                        React.createElement('span', { style: {fontWeight:700}}, guild?.name || "Server"),
-                        React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 8 } }, `#${channel.name}`)
-                    ]
-                    : [
-                        React.createElement('svg', {
-                            width: 18,
-                            height: 18,
-                            viewBox: "0 0 24 24",
-                            fill: "currentColor",
-                            style: { marginRight: 4, verticalAlign: 'middle', color: 'var(--brand-experiment)' }
-                        }, React.createElement('path', { d: "M3 4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6l3 3 3-3h6c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H3zm0 2h18v11h-6.17L12 20.17 9.17 17H3V6zm2 2v2h14V8H5zm0 4v2h9v-2H5z"})),
-                        React.createElement('span', { style: {fontWeight:700}}, "Direct Message")
-                    ]
+                isGuild ? [
+                    React.createElement('span', { style: {fontWeight:700}}, guild?.name || "Server"),
+                    React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 8 } }, `#${channel.name}`)
+                ] :
+                isGroupDM ? [
+                    React.createElement('span', { style: {fontWeight:700}}, channel.name || "Group DM"),
+                    React.createElement('span', { style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 8 } }, "Group Chat")
+                ] :
+                [
+                    React.createElement('svg', {
+                        width: 18,
+                        height: 18,
+                        viewBox: "0 0 24 24",
+                        fill: "currentColor",
+                        style: { marginRight: 4, verticalAlign: 'middle', color: 'var(--brand-experiment)' }
+                    }, React.createElement('path', { d: "M3 4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6l3 3 3-3h6c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H3zm0 2h18v11h-6.17L12 20.17 9.17 17H3V6zm2 2v2h14V8H5zm0 4v2h9v-2H5z"})),
+                    React.createElement('span', { style: {fontWeight:700}}, "Direct Message")
+                ]
             ),
             settings.showTimer && React.createElement('span', {
                 style: {
@@ -477,6 +511,7 @@ function NotificationComponent({
         },
             React.createElement("div", { style: { position: "relative", display: "flex", alignItems: "center" } },
                 React.createElement("button", {
+                    ref: quickActionBtnRef,
                     tabIndex: -1,
                     style: {
                         border: "none",
@@ -487,53 +522,31 @@ function NotificationComponent({
                         zIndex: 10
                     },
                     title: "Quick Actions",
-                    onMouseEnter: () => setQuickActionsExpanded(true),
-                    onMouseLeave: () => setQuickActionsExpanded(false),
+                    onMouseEnter: () => {
+                        if (quickActionBtnRef.current) {
+                            const rect = quickActionBtnRef.current.getBoundingClientRect();
+                            setQuickActionsMenuPos({
+                                left: rect.left,
+                                top: rect.bottom + 4
+                            });
+                        }
+                        safeSetQuickActionsHover(true);
+                    },
+                    onMouseLeave: () => safeSetQuickActionsHover(false),
                     onClick: (e) => {
                         stopBubble(e);
-                        setQuickActionsExpanded(v => !v);
+                        if (quickActionBtnRef.current) {
+                            const rect = quickActionBtnRef.current.getBoundingClientRect();
+                            setQuickActionsMenuPos({
+                                left: rect.left,
+                                top: rect.bottom + 4
+                            });
+                        }
+                        setQuickActionsHover(v => !v);
                         if (showQuickActionPill) setTimeout(dismissQuickActionPill, 2000);
                     }
                 }, "✨"),
-                React.createElement("div", {
-                    style: {
-                        position: "absolute",
-                        left: 38,
-                        bottom: 44,
-                        width: quickActionsExpanded ? 170 : 38,
-                        maxHeight: quickActionsExpanded ? 192 : 38,
-                        minHeight: 38,
-                        background: "var(--background-floating, #23272a)",
-                        borderRadius: "8px",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                        padding: quickActionsExpanded ? "8px 0" : "0",
-                        zIndex: 10004,
-                        overflowY: "auto",
-                        overflowX: "hidden",
-                        display: quickActionsExpanded ? "block" : "none",
-                        transition: "all .18s cubic-bezier(.4,1,.7,1.2)",
-                    },
-                    onMouseEnter: () => setQuickActionsExpanded(true),
-                    onMouseLeave: () => setQuickActionsExpanded(false)
-                },
-                    (votzyboQuickActions || []).map((action, i) =>
-                        React.createElement("div", {
-                            key: i,
-                            style: {
-                                padding: "6px 16px",
-                                cursor: "pointer",
-                                fontSize: "17px",
-                                color: "var(--text-normal)",
-                                borderBottom: (i < votzyboQuickActions.length - 1) ? "1px solid var(--background-tertiary)" : "none",
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                            },
-                            onClick: (e) => { stopBubble(e); handleQuickAction(action); }
-                        }, action)
-                    )
-                ),
-                showQuickActionPill && quickActionsExpanded && React.createElement("div", {
+                showQuickActionPill && quickActionsHover && React.createElement("div", {
                     className: "ping-notification-quickreply-pill"
                 }, "Customize your Quick Actions in settings!")
             ),
@@ -604,7 +617,48 @@ function NotificationComponent({
                 fontWeight: 'bold',
                 fontSize: '10px'
             }
-        }, `Keyword: ${matchedKeyword}`)
+        }, `Keyword: ${matchedKeyword}`),
+        // --- Portal for Quick Actions Menu ---
+        quickActionsHover && quickActionsMenuPos && ReactDOM.createPortal(
+            React.createElement("div", {
+                style: {
+                    position: "fixed",
+                    left: quickActionsMenuPos.left,
+                    top: quickActionsMenuPos.top,
+                    width: 170,
+                    maxHeight: 192,
+                    minHeight: 38,
+                    background: "var(--background-floating, #23272a)",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                    padding: "8px 0",
+                    zIndex: 10020,
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                    transition: "all .18s cubic-bezier(.4,1,.7,1.2)"
+                },
+                onMouseEnter: () => safeSetQuickActionsHover(true),
+                onMouseLeave: () => safeSetQuickActionsHover(false)
+            },
+                (votzyboQuickActions || []).map((action, i) =>
+                    React.createElement("div", {
+                        key: i,
+                        style: {
+                            padding: "6px 16px",
+                            cursor: "pointer",
+                            fontSize: "17px",
+                            color: "var(--text-normal)",
+                            borderBottom: (i < votzyboQuickActions.length - 1) ? "1px solid var(--background-tertiary)" : "none",
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        },
+                        onClick: (e) => { stopBubble(e); handleQuickAction(action); }
+                    }, action)
+                )
+            ),
+            document.body
+        )
     );
 }
 
