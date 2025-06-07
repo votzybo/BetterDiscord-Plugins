@@ -6,6 +6,13 @@
 
 ---
 
+### 📷 Preview
+
+![Image](https://github.com/user-attachments/assets/54bc75e9-d251-4a66-9bc9-e8da24c87ee4)
+*Expand Function Operates On Hover--Not on click*
+
+---
+
 ### 📌 Description
 
 `JumpToTopBottomPingUser` is a sleek navigation widget for Discord chat that sits to the right of the upload button. It expands on hover and gives you instant access to:
@@ -26,13 +33,6 @@ Toast notifications appear centered above the chat to confirm actions and improv
 - Automatically highlights the jumped-to message for quick visual confirmation.
 - Graceful fallback when native buttons are unavailable.
 - Lightweight styling that blends with Discord's look.
-
----
-
-### 📷 Preview
-
-![Image](https://github.com/user-attachments/assets/54bc75e9-d251-4a66-9bc9-e8da24c87ee4)
-*Expand Function Operates On Hover--Not on click*
 
 ---
 
