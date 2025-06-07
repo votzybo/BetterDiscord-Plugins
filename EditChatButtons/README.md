@@ -2,6 +2,10 @@
 
 Customize your Discord chat bar by removing unwanted buttons and controlling spacing.
 
+## ⭐ Preview Settings
+
+![Image](https://github.com/user-attachments/assets/ef080504-4c1e-4925-9115-bb1b1dc15358)
+
 ## ✨ Features
 
 - Remove:
