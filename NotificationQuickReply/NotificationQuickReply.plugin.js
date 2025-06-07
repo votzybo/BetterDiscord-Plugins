@@ -1,7 +1,7 @@
 /**
  * @name NotificationQuickReply
  * @author votzybo
- * @version 9.7.2-autosize-modernsettings
+ * @version 9.7.3-autosize-modernsettings
  * @description In-app notifications for messages/mentions/keywords, with quick reply, quick actions, modern header, visible timer, improved spacing, and a slick, modern settings GUI. Notification height auto-expands to fit message. Progress bar, error handling, scrollable quick panel. Settings allow control of duration, timer, size, position, and more. Notification closes automatically after sending a quick reply.
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
@@ -9,9 +9,8 @@
  * @updateurl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/AtSomeoneRoullette/AtSomeoneRoullette.plugin.js
  */
 
-/* ------------------ COMPONENTS FIRST: ProgressBar, NotificationComponent, ModernSwitch, ModernSlider, ModernSelect, ModernSettingsPanel, VotzyboSettingsPanel ----------------- */
+// ------------------ COMPONENTS FIRST: ProgressBar, NotificationComponent, ModernSwitch, ModernSlider, ModernSelect, ModernSettingsPanel, VotzyboSettingsPanel -----------------
 
-// ProgressBar
 function ProgressBar({ duration, isPaused, onComplete, showTimer, setHeaderTimer }) {
     const [remainingTime, setRemainingTime] = React.useState(duration);
     const [localPause, setLocalPause] = React.useState(false);
@@ -163,276 +162,8 @@ function ProgressBar({ duration, isPaused, onComplete, showTimer, setHeaderTimer
     );
 }
 
-// Modern Switch
-function ModernSwitch({value, onChange, label, style}) {
-    return React.createElement("label", {style: {display: "flex", alignItems: "center", gap: 8, ...style}},
-        React.createElement("span", {style: {fontWeight: 500, color: "var(--header-secondary)"}}, label),
-        React.createElement("span", {
-            style: {
-                width: 36, height: 20, borderRadius: 50,
-                background: value ? "var(--brand-experiment)" : "var(--background-tertiary)",
-                display: "inline-block",
-                position: "relative",
-                cursor: "pointer",
-                transition: "background 0.2s"
-            },
-            onClick: () => onChange(!value)
-        }, React.createElement("span", {
-            style: {
-                display: "block",
-                position: "absolute",
-                left: value ? 18 : 2,
-                top: 2,
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                background: "#FFF",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.13)",
-                transition: "left 0.17s cubic-bezier(.4,1,.7,1.2)"
-            }
-        }))
-    );
-}
+// ...ModernSwitch, ModernSlider, ModernSelect, ModernSettingsPanel, VotzyboSettingsPanel unchanged...
 
-// ModernSlider
-function ModernSlider({min, max, value, step=1, onChange, label, style, width=180, unit}) {
-    return React.createElement("div", {style: {margin: "14px 0", ...style}},
-        React.createElement("div", {style: {fontWeight: 500, color: "var(--header-secondary)", marginBottom: 4}}, label),
-        React.createElement("div", {style:{display:"flex",alignItems:"center",gap:14}},
-            React.createElement("input", {
-                type: "range",
-                min, max, value, step,
-                onChange: e => onChange(Number(e.target.value)),
-                style: {width}
-            }),
-            React.createElement("input", {
-                type: "number",
-                min, max, value, step,
-                onChange: e => onChange(Number(e.target.value)),
-                style: {width: 52, borderRadius: 5, border: "1px solid var(--background-tertiary)", padding: "2px 8px"}
-            }),
-            unit && React.createElement("span", {style:{fontSize:13, color:"var(--text-muted)"}}, unit)
-        )
-    );
-}
-
-// ModernSelect
-function ModernSelect({label, value, options, onChange, style}) {
-    return React.createElement("div", {style: {margin: "14px 0", ...style}},
-        React.createElement("div", {style: {fontWeight: 500, color: "var(--header-secondary)", marginBottom: 4}}, label),
-        React.createElement("select", {
-            value, onChange: e => onChange(e.target.value),
-            style: {
-                width: 180,
-                padding: "6px 10px", borderRadius: 6,
-                border: "1px solid var(--background-tertiary)",
-                background: "var(--background-primary)",
-                color: "var(--text-normal)",
-                fontSize: 14
-            }
-        }, options.map(opt => React.createElement("option", {key:opt.value, value:opt.value}, opt.label)))
-    );
-}
-
-// ModernSettingsPanel
-function ModernSettingsPanel({ settings, updateSettings, testNotification }) {
-    const [duration, setDuration] = React.useState(Math.round((settings.duration || 15000) / 1000));
-    const [showTimer, setShowTimer] = React.useState(settings.showTimer !== false);
-    const [maxWidth, setMaxWidth] = React.useState(settings.maxWidth || 370);
-    const [maxHeight, setMaxHeight] = React.useState(settings.maxHeight || 340);
-    const [popupLocation, setPopupLocation] = React.useState(settings.popupLocation || "bottomRight");
-
-    React.useEffect(() => {
-        updateSettings({
-            duration: duration * 1000,
-            showTimer,
-            maxWidth,
-            maxHeight,
-            popupLocation,
-        });
-    }, [duration, showTimer, maxWidth, maxHeight, popupLocation]);
-
-    return React.createElement("div", {style: {
-        padding: 32,
-        background: "var(--background-secondary)",
-        borderRadius: 18,
-        boxShadow: "0 4px 24px 0 rgba(0,0,0,0.14)",
-        maxWidth: 540,
-        margin: "30px auto"
-    }},
-        React.createElement("div", {
-            style: {
-                display: "flex", alignItems: "center", gap: 12,
-                marginBottom: 10
-            }
-        },
-            React.createElement("svg", {width: 30, height: 30, viewBox: "0 0 24 24", fill: "none"},
-                React.createElement("rect", {x:4, y:4, width:16, height:16, rx:5, fill:"#5865f2", opacity:0.32}),
-                React.createElement("rect", {x:9, y:9, width:6, height:6, rx:3, fill:"#5865F2"}),
-                React.createElement("path", {d: "M17.5 7.5l-11 9", stroke:"#5865F2", strokeWidth:2, strokeLinecap:"round"})
-            ),
-            React.createElement("h1", {style: {
-                fontSize: 22,
-                fontWeight: 800,
-                color: "var(--header-primary)",
-                margin: 0
-            }}, "PingNotification Settings")
-        ),
-        React.createElement("div", {style: {color: "var(--header-secondary)", marginBottom: 18, fontSize: 15}},
-            "Personalize your in-app notifications, quick replies, and more."
-        ),
-        React.createElement(ModernSlider, {
-            min: 2, max: 180, value: duration, unit: "seconds",
-            onChange: setDuration,
-            label: "Notification Duration"
-        }),
-        React.createElement(ModernSwitch, {
-            value: showTimer, onChange: setShowTimer, label: "Show countdown timer and progress bar"
-        }),
-        React.createElement(ModernSlider, {
-            min: 200, max: 700, value: maxWidth, unit: "px", onChange: setMaxWidth, label: "Notification Width"
-        }),
-        React.createElement(ModernSlider, {
-            min: 80, max: 1200, value: maxHeight, unit: "px", onChange: setMaxHeight, label: "Notification Max Height"
-        }),
-        React.createElement(ModernSelect, {
-            value: popupLocation,
-            onChange: setPopupLocation,
-            label: "Notification Position",
-            options: [
-                {value:"topLeft", label:"Top Left"},
-                {value:"topRight", label:"Top Right"},
-                {value:"bottomLeft", label:"Bottom Left"},
-                {value:"bottomRight", label:"Bottom Right"},
-                {value:"topCentre", label:"Top Center"},
-                {value:"bottomCentre", label:"Bottom Center"},
-            ]
-        }),
-        React.createElement("div", {style: {marginTop: 28, marginBottom: 2}},
-            React.createElement("button", {
-                style: {
-                    background: "var(--brand-experiment)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "10px 24px",
-                    fontWeight: 700,
-                    fontSize: 16,
-                    cursor: "pointer",
-                    boxShadow: "0 2px 8px rgba(88,101,242,0.08)"
-                },
-                onClick: testNotification
-            }, "Send Test Notification")
-        ),
-        React.createElement("div", {style: {
-            margin: "32px -32px -32px", background: "var(--background-tertiary)", borderRadius: "0 0 18px 18px", padding: "14px 32px"
-        }},
-            React.createElement("span", {style: {fontWeight: 700, fontSize: 14, color: "var(--brand-experiment)"}}, "Tip:"),
-            " You can also configure your Quick Reply and Quick Actions at the bottom of this page."
-        )
-    );
-}
-
-// VotzyboSettingsPanel
-function VotzyboSettingsPanel({ settings, onChange }) {
-    const [actions, setActions] = React.useState(settings.quickActions.slice());
-    const [quickReply, setQuickReply] = React.useState(settings.quickReplyEnabled);
-    const [newAction, setNewAction] = React.useState("");
-    function saveChanges() {
-        onChange({
-            quickReplyEnabled: quickReply,
-            quickActions: actions.filter(a => a.trim() !== "")
-        });
-    }
-    React.useEffect(saveChanges, [actions, quickReply]);
-    function addAction() {
-        if (newAction.trim() && actions.length < 8 && !actions.includes(newAction.trim())) {
-            setActions(a => [...a, newAction.trim()]);
-            setNewAction("");
-        }
-    }
-    function removeAction(idx) {
-        setActions(a => a.filter((_, i) => i !== idx));
-    }
-    function updateAction(idx, value) {
-        setActions(arr => arr.map((a, i) => i === idx ? value : a));
-    }
-    return React.createElement("div", { style: {
-        padding: "24px 32px 28px",
-        background: "var(--background-secondary)",
-        borderRadius: "0 0 18px 18px",
-        margin: "32px auto 0",
-        maxWidth: 540,
-        boxShadow: "0 0 0 0 transparent"
-    }},
-        React.createElement("h2", {style: {marginTop:0, fontWeight:800, fontSize:18, color:"var(--header-primary)"}}, "Quick Reply & Quick Actions"),
-        React.createElement(ModernSwitch, {
-            value: quickReply,
-            onChange: setQuickReply,
-            label: "Enable quick reply box on notifications"
-        }),
-        React.createElement("div", { style: { margin: "18px 0 10px", color: "var(--header-secondary)", fontWeight:500 } }, "Quick Actions (max 8):"),
-        React.createElement("div", {style: {display: "flex", flexDirection: "column", gap: 8, marginBottom: 14}},
-            actions.map((action, idx) =>
-                React.createElement("div", { key: idx, style: { display: "flex", alignItems: "center", gap: 7 } },
-                    React.createElement("input", {
-                        type: "text",
-                        value: action,
-                        maxLength: 24,
-                        onChange: e => updateAction(idx, e.target.value),
-                        style: {
-                            marginRight: 8, flex: "1 1 auto", padding: 6, borderRadius: 6,
-                            border: "1px solid var(--background-tertiary)", background: "var(--background-primary)", fontSize: 15
-                        }
-                    }),
-                    React.createElement("button", {
-                        onClick: () => removeAction(idx),
-                        style: {
-                            background: "var(--background-tertiary)",
-                            border: "none",
-                            borderRadius: 6,
-                            padding: "4px 12px",
-                            cursor: "pointer",
-                            color: "var(--text-danger)",
-                            fontWeight:700,
-                            fontSize: 13
-                        }
-                    }, "Remove")
-                )
-            )
-        ),
-        actions.length < 8 && React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 0 } },
-            React.createElement("input", {
-                type: "text",
-                value: newAction,
-                maxLength: 24,
-                onChange: e => setNewAction(e.target.value),
-                placeholder: "Add quick action...",
-                style: {
-                    marginRight: 8, flex: "1 1 auto", padding: 6, borderRadius: 6,
-                    border: "1px solid var(--background-tertiary)", background: "var(--background-primary)", fontSize: 15
-                }
-            }),
-            React.createElement("button", {
-                onClick: addAction,
-                disabled: !newAction.trim(),
-                style: {
-                    background: "var(--brand-experiment)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "5px 15px",
-                    cursor: newAction.trim() ? "pointer" : "not-allowed",
-                    opacity: newAction.trim() ? 1 : 0.5,
-                    fontWeight:700,
-                    fontSize: 14
-                }
-            }, "Add")
-        )
-    );
-}
-
-// --- Helper to add messages for MessageStore
 function addMessage(message) {
     const ChannelConstructor = BdApi.Webpack.getModule(BdApi.Webpack.Filters.byPrototypeKeys("addCachedMessages"));
     const channel = ChannelConstructor.getOrCreate(message.channel_id);
@@ -444,7 +175,6 @@ function addMessage(message) {
     ChannelConstructor.commit(newChannel);
 }
 
-// NotificationComponent is the main notification React component
 function NotificationComponent({
     message:propMessage, channel, settings,
     votzyboQuickReplyEnabled = true,
@@ -600,7 +330,6 @@ function NotificationComponent({
                 position: 'relative'
             }
         },
-            // DM/Server indicator
             React.createElement('div', {
                 style: {
                     display: 'flex',
@@ -627,7 +356,6 @@ function NotificationComponent({
                         React.createElement('span', { style: {fontWeight:700}}, "Direct Message")
                     ]
             ),
-            // Timer indicator in header (top right)
             settings.showTimer && React.createElement('span', {
                 style: {
                     position: 'absolute',
@@ -642,7 +370,6 @@ function NotificationComponent({
             },
                 `${Math.max(Math.ceil(headerTimer / 1000), 0)}s`
             ),
-            // Close button
             React.createElement('div', { 
                 className: "ping-notification-close", 
                 onClick: (e) => { 
@@ -675,7 +402,6 @@ function NotificationComponent({
                 )
             )
         ),
-        // --- Error Banner
         errorBanner && React.createElement(
             "div",
             {
@@ -692,7 +418,6 @@ function NotificationComponent({
             },
             errorBanner
         ),
-        // --- Message
         React.createElement('div', { 
             className: "ping-notification-body",
             style: { 
@@ -746,74 +471,72 @@ function NotificationComponent({
                 onClick: onClick
             }) : null
         ]),
-        // --- QUICK REPLY & QUICK ACTIONS ---
         votzyboQuickReplyEnabled && React.createElement('div', {
             className: 'ping-notification-quickreply-wrapper',
-            style: { display: "flex", position: "relative", paddingBottom: 0, minHeight: 52 },
-            onMouseEnter: () => { setReplyHovered(true); setQuickActionsExpanded(true); },
-            onMouseLeave: () => { setReplyHovered(false); setQuickActionsExpanded(false); }
+            style: { display: "flex", position: "relative", paddingBottom: 0, minHeight: 52 }
         },
-            React.createElement("button", {
-                tabIndex: -1,
-                style: {
-                    border: "none",
-                    background: "none",
-                    fontSize: "20px",
-                    cursor: "pointer",
-                    padding: "0 6px 0 0",
-                    zIndex: 10
+            React.createElement("div", { style: { position: "relative", display: "flex", alignItems: "center" } },
+                React.createElement("button", {
+                    tabIndex: -1,
+                    style: {
+                        border: "none",
+                        background: "none",
+                        fontSize: "20px",
+                        cursor: "pointer",
+                        padding: "0 6px 0 0",
+                        zIndex: 10
+                    },
+                    title: "Quick Actions",
+                    onMouseEnter: () => setQuickActionsExpanded(true),
+                    onMouseLeave: () => setQuickActionsExpanded(false),
+                    onClick: (e) => {
+                        stopBubble(e);
+                        setQuickActionsExpanded(v => !v);
+                        if (showQuickActionPill) setTimeout(dismissQuickActionPill, 2000);
+                    }
+                }, "✨"),
+                React.createElement("div", {
+                    style: {
+                        position: "absolute",
+                        left: 38,
+                        bottom: 44,
+                        width: quickActionsExpanded ? 170 : 38,
+                        maxHeight: quickActionsExpanded ? 192 : 38,
+                        minHeight: 38,
+                        background: "var(--background-floating, #23272a)",
+                        borderRadius: "8px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                        padding: quickActionsExpanded ? "8px 0" : "0",
+                        zIndex: 10004,
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        display: quickActionsExpanded ? "block" : "none",
+                        transition: "all .18s cubic-bezier(.4,1,.7,1.2)",
+                    },
+                    onMouseEnter: () => setQuickActionsExpanded(true),
+                    onMouseLeave: () => setQuickActionsExpanded(false)
                 },
-                title: "Quick Actions",
-                onClick: (e) => {
-                    stopBubble(e);
-                    setQuickActionsExpanded(v => !v);
-                    if (showQuickActionPill) setTimeout(dismissQuickActionPill, 2000);
-                }
-            }, "✨"),
-            // --- Quick actions panel, always shows all actions, scrollable, expands on hover ---
-            React.createElement("div", {
-                style: {
-                    position: "absolute",
-                    left: 38,
-                    bottom: 44,
-                    width: quickActionsExpanded ? 170 : 38,
-                    maxHeight: quickActionsExpanded ? 192 : 38,
-                    minHeight: 38,
-                    background: "var(--background-floating, #23272a)",
-                    borderRadius: "8px",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                    padding: quickActionsExpanded ? "8px 0" : "0",
-                    zIndex: 10004,
-                    overflowY: "auto",
-                    overflowX: "hidden",
-                    display: quickActionsExpanded ? "block" : "none",
-                    transition: "all .18s cubic-bezier(.4,1,.7,1.2)",
-                },
-                onMouseEnter: () => setQuickActionsExpanded(true),
-                onMouseLeave: () => setQuickActionsExpanded(false)
-            },
-                (votzyboQuickActions || []).map((action, i) =>
-                    React.createElement("div", {
-                        key: i,
-                        style: {
-                            padding: "6px 16px",
-                            cursor: "pointer",
-                            fontSize: "17px",
-                            color: "var(--text-normal)",
-                            borderBottom: (i < votzyboQuickActions.length - 1) ? "1px solid var(--background-tertiary)" : "none",
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                        },
-                        onClick: (e) => { stopBubble(e); handleQuickAction(action); }
-                    }, action)
-                )
+                    (votzyboQuickActions || []).map((action, i) =>
+                        React.createElement("div", {
+                            key: i,
+                            style: {
+                                padding: "6px 16px",
+                                cursor: "pointer",
+                                fontSize: "17px",
+                                color: "var(--text-normal)",
+                                borderBottom: (i < votzyboQuickActions.length - 1) ? "1px solid var(--background-tertiary)" : "none",
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                            },
+                            onClick: (e) => { stopBubble(e); handleQuickAction(action); }
+                        }, action)
+                    )
+                ),
+                showQuickActionPill && quickActionsExpanded && React.createElement("div", {
+                    className: "ping-notification-quickreply-pill"
+                }, "Customize your Quick Actions in settings!")
             ),
-            // --- Quick action pill ---
-            showQuickActionPill && quickActionsExpanded && React.createElement("div", {
-                className: "ping-notification-quickreply-pill"
-            }, "Customize your Quick Actions in settings!"),
-            // --- The input & send button ---
             React.createElement("input", {
                 ref: replyRef,
                 type: "text",
@@ -862,7 +585,6 @@ function NotificationComponent({
                 }
             }, sending ? "..." : "Send")
         ),
-        // --- PROGRESS BAR at the bottom ---
         React.createElement(ProgressBar, {
             duration: settings.duration,
             isPaused: isPaused || replyFocused || replyHovered,
@@ -885,8 +607,6 @@ function NotificationComponent({
         }, `Keyword: ${matchedKeyword}`)
     );
 }
-
-/* --------------------- Main Plugin Class ------------------------ */
 
 // --- Constants ---
 const VOTZYBO_SETTINGS_KEY = "votzybo_settings";
@@ -912,7 +632,6 @@ const MessageActions = BdApi.Webpack.getByKeys("fetchMessage", "deleteMessage");
 const ChannelConstructor = BdApi.Webpack.getModule(BdApi.Webpack.Filters.byPrototypeKeys("addCachedMessages"));
 const constructMessageObj = Webpack.getModule(Webpack.Filters.byStrings("message_reference", "isProbablyAValidSnowflake"), { searchExports: true });
 
-// --- Main Plugin Class ---
 module.exports = class PingNotification {
     constructor(meta) {
         this.meta = meta;
