@@ -2,6 +2,14 @@
 
 Live lyrics synced with your Spotify music. Requires DevilBro’s SpotifyControls plugin.
 
+## ⭐ Preview Settings
+
+![Image](https://github.com/user-attachments/assets/17f42c3f-e6b3-422c-9812-d1f9c0678dc1)
+
+## 💫 Preview in Panel
+
+https://github.com/user-attachments/assets/f0d03ef4-b543-4723-951b-0442955cc4a0
+
 ## ✨ Features
 
 - Sidebar lyrics panel
