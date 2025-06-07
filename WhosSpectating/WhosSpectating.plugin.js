@@ -6,13 +6,12 @@
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
- * @updateUrl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/main/WhosSpectating.plugin.js
+ * @updateUrl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/WhosSpectating/WhosSpectating.plugin.js
  */
 
 class WhosWatching {
     constructor() {
         this.defaultSettings = {
-            overflowShrink: false,
             showUsernames: true,
             enableFakeSpectators: false // Now disabled by default
         };
@@ -205,17 +204,6 @@ class WhosWatching {
         title.className = "whoswatching-settings-title";
         title.textContent = "WhosWatching Settings";
         panel.appendChild(title);
-
-        // Overflow Shrink Toggle
-        panel.appendChild(this._makeToggleGroup(
-            "Overflow Shrink",
-            "If enabled and there are more than three spectators, only their avatars are shown to save space.",
-            this.settings.overflowShrink,
-            checked => {
-                this.settings.overflowShrink = checked;
-                BdApi.saveData("WhosWatching", "settings", this.settings);
-            }
-        ));
 
         // Show Usernames Toggle
         panel.appendChild(this._makeToggleGroup(
@@ -441,7 +429,7 @@ class WhosWatching {
             // -- Avatar multi-row logic for collapsed mode
             if (collapsed) {
                 // Calculate number of rows: 1 row per 10 spectators
-                const avatarsPerRow = 10;
+                const avatarsPerRow = 9;
                 const rows = Math.ceil(users.length / avatarsPerRow);
                 // Let CSS set max-height for the number of rows
                 listDiv.style.maxHeight = `${rows * 32 + (rows-1)*4}px`;
