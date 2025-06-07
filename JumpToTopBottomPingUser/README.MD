@@ -32,7 +32,7 @@ Toast notifications appear centered above the chat to confirm actions and improv
 ### 📷 Preview
 
 ![Image](https://github.com/user-attachments/assets/54bc75e9-d251-4a66-9bc9-e8da24c87ee4)
-*Example of the expanding widget and jump actions.*
+*Expand Function Operates On Hover--Not on click*
 
 ---
 
