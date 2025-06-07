@@ -2,7 +2,11 @@
 
 Clean, fast in-app notifications with quick reply and quick action support.
 
-## ⭐ Preview Settings
+## ⭐ Settings Showcase
+
+![Image](https://github.com/user-attachments/assets/bbf0d95c-d8c2-473d-bca9-215b771aadee)
+
+## 💫 Plugin Showcase 
 
 ![Image](https://github.com/user-attachments/assets/db5670ac-34c5-4689-ad8d-04b86122b028)
 
