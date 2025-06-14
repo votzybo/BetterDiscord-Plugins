@@ -1,56 +1,53 @@
 /**
  * @name EditChatButtons
  * @author votzybo
- * @version 1.3.1
+ * @version 1.3.2
  * @description Lets you selectively remove Discord chatbar buttons: Gift, GIF, Sticker, and Game buttons. Also ensures all visible buttons are always evenly spaced apart, with customizable gap.
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
- * @updateUrl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/main/EditChatButtons.plugin.js
+ * @updateUrl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/EditChatButtons/EditChatButtons.plugin.js
  */
 
+// total hours wasted making this plugin: 3??
+// If Discord changes classnames again, I'm going to lose it
 
 const BUTTON_CONFIG = [
     {
         name: "Gift",
-        selector: '.buttons__74017 > button.button__201d5.lookBlank__201d5.colorBrand__201d5.grow__201d5 > div',
+        selector: '.buttons__74017 button', // Robust: all buttons in chatbar
         match: (el) => {
-            const aria = el.parentElement?.getAttribute("aria-label") || "";
-            if (aria.toLowerCase().includes("gift")) return true;
-            const svg = el.querySelector("svg");
-            return svg && svg.innerHTML.toLowerCase().includes("present");
+            // Robustly detect the Gift button by aria-label (most stable)
+            // You can require a trigger element to exist if you want (see below)
+            // if (!document.querySelector("#PersistentGift")) return false;
+            return el.getAttribute("aria-label") === "Send a gift";
         }
     },
     {
         name: "GIF",
-        selector: '.buttons__74017 > div:nth-child(3) > button > div',
-        match: (el) => {
-            if (el.textContent.trim().toUpperCase() === "GIF") return true;
-            const aria = el.parentElement?.getAttribute("aria-label") || "";
-            return aria.toUpperCase() === "GIF";
-        }
+        selector: '.buttons__74017 button',
+        match: (el) => el.getAttribute("aria-label") === "Open GIF picker"
     },
     {
         name: "Sticker",
-        selector: '.buttons__74017 > div:nth-child(4) > button > div',
-        match: (el) => {
-            const aria = el.parentElement?.getAttribute("aria-label") || "";
-            return aria.toLowerCase().includes("sticker");
-        }
+        selector: '.buttons__74017 button',
+        match: (el) => el.getAttribute("aria-label") === "Open sticker picker"
     },
     {
         name: "Game",
-        selector: '.buttons__74017 > div.channelAppLauncher_e6e74f > div > button',
-        match: (el) => true
+        selector: '.channelAppLauncher_e6e74f button',
+        match: (el) => el.getAttribute("aria-label") === "Apps"
     }
 ];
 
+// Clamp for slider, just in case user tries to break it
 function clamp(num, min, max) {
     return Math.max(min, Math.min(num, max));
 }
 
 module.exports = class EditChatButtons {
     constructor() {
+        // If Discord reloads and constructor isn't called, settings might be out of sync
         const saved = BdApi.loadData("EditChatButtons", "settings");
         this.settings = saved ? {...this.defaultSettings(), ...saved} : this.defaultSettings();
         this._observer = null;
@@ -58,6 +55,7 @@ module.exports = class EditChatButtons {
     }
 
     defaultSettings() {
+        // I should probably add emoji button here someday
         return {
             Gift: false,
             GIF: false,
@@ -72,15 +70,16 @@ module.exports = class EditChatButtons {
     }
 
     start() {
-        // Always load settings on start, in case Discord reloaded and constructor wasn't called
+        // Always reload settings on start in case Discord did a full reload
         const saved = BdApi.loadData("EditChatButtons", "settings");
         if (saved) this.settings = {...this.defaultSettings(), ...saved};
 
         this._observer = new MutationObserver(() => {
+            // Sometimes Discord re-renders the chatbar randomly, so run this a lot
             this.removeButtons();
             this.applyEvenSpacing();
         });
-        this._observer.observe(document.body, {childList: true, subtree: true});
+        this._observer.observe(document.body, {childList: true, subtree: true, attributes: true});
         this.removeButtons();
         this.applyEvenSpacing();
         this.injectStyle();
@@ -93,10 +92,12 @@ module.exports = class EditChatButtons {
     }
 
     removeButtons() {
+        // Remove selected buttons, if user chose to hide them
         BUTTON_CONFIG.forEach(cfg => {
             if (!this.settings[cfg.name]) return;
             document.querySelectorAll(cfg.selector).forEach(el => {
                 if (cfg.match(el)) {
+                    // If Discord changes the button wrapper, this will break. Oh well.
                     let btn = el.closest("button") || el.closest("div.channelAppLauncher_e6e74f");
                     if (btn) btn.style.display = "none";
                 }
@@ -106,16 +107,18 @@ module.exports = class EditChatButtons {
     }
 
     restoreButtons() {
+        // Reset display on all potential buttons (even if user didn't hide them)
         BUTTON_CONFIG.forEach(cfg => {
             document.querySelectorAll(cfg.selector).forEach(el => {
                 let btn = el.closest("button") || el.closest("div.channelAppLauncher_e6e74f");
-                if (btn) btn.style.display = "";
+                if (btn && cfg.match(el)) btn.style.display = "";
             });
         });
         this.applyEvenSpacing();
     }
 
     injectStyle() {
+        // Remove old style to avoid stacking up a million tags
         this.removeStyle();
         const style = document.createElement("style");
         style.id = this._styleId;
@@ -129,16 +132,16 @@ module.exports = class EditChatButtons {
     }
 
     applyEvenSpacing() {
-        // Just update the CSS variable for gap on all chatbars
+        // Update the gap variable on all chatbars
         document.querySelectorAll(".buttons__74017").forEach(toolbar => {
             toolbar.style.setProperty('--ecb-gap', `${this.settings.gap}px`);
         });
-        // Also update the style tag if user changed gap in UI
+        // If user changes the gap, re-inject style for live updating
         this.injectStyle();
     }
 
     _getSpacingCSS() {
-        // Use CSS var for gap so it's live-updating
+        // I tried "justify-content: space-between" but it looked weird with hidden buttons
         return `
             .buttons__74017 {
                 display: flex !important;
@@ -161,6 +164,7 @@ module.exports = class EditChatButtons {
         panel.className = "ecb-settings-root";
         panel.style.maxWidth = "420px";
         panel.style.margin = "32px auto";
+        // Please don't judge me for writing HTML in a string
         panel.innerHTML = `
             <style>
                 .ecb-settings-root {
@@ -292,6 +296,7 @@ module.exports = class EditChatButtons {
         gapValue.className = "ecb-gap-value";
         gapValue.textContent = this.settings.gap + "px";
         gapSlider.oninput = (e) => {
+            // Discord will probably break this at some point
             let val = clamp(parseInt(gapSlider.value), 0, 32);
             this.settings.gap = val;
             gapValue.textContent = val + "px";
@@ -303,14 +308,14 @@ module.exports = class EditChatButtons {
         gapRow.appendChild(gapValue);
         panel.appendChild(gapRow);
 
-        // Add each toggle row
+        // Button toggles for each config
         BUTTON_CONFIG.forEach(cfg => {
             const row = document.createElement("div");
             row.className = "ecb-toggle-row";
             const label = document.createElement("span");
             label.className = "ecb-label";
             label.textContent = "Remove " + cfg.name + " button";
-            // Toggle switch
+            // Toggle switch component
             const switchLabel = document.createElement("label");
             switchLabel.className = "ecb-switch";
             const input = document.createElement("input");
@@ -334,3 +339,7 @@ module.exports = class EditChatButtons {
         return panel;
     }
 }
+
+// TODO: Support custom emoji button if Discord ever makes it optional
+// let unused = 42; // leftover from testing
+// console.log("EditChatButtons loaded"); // For debug, remove in prod
