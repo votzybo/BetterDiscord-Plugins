@@ -1,7 +1,7 @@
 /**
  * @name ShortcutScreenshareScreen
  * @description Screenshare screen from keyboard shortcut when no game is running, with fast/disconnected hotkey response and toast confirmations.
- * @version 1.2.2
+ * @version 1.3.2
  * @author nicola02nb, (global hotkey and toast confirmation by votzybo)
  * @invite hFuY8DfDGK
  * @authorLink https://github.com/nicola02nb
@@ -13,6 +13,7 @@ const config = {
         { type: "number", id: "displayNumber", name: "Default Display to Screenshare", note: "Set the default display number to screenshare.", value: 1, min: 1, max: 1, step: 1 },
         { type: "category", id: "keybinds", name: "Keybinds", settings: [
             { type: "keybind", id: "toggleStreamShortcut", name: "Toggle Stream Shortcut", note: "Set the shortcut to toggle the stream.", clearable: true, value: [] },
+            { type: "keybind", id: "endStreamShortcut", name: "End Stream Shortcut", note: "Set the shortcut to END the stream (will not start it).", clearable: true, value: [] },
             { type: "keybind", id: "toggleGameOrScreenShortcut", name: "Toggle Game/Screen Shortcut", note: "Set the shortcut to toggle between sharing game or screen.", clearable: true, value: [] },
             { type: "keybind", id: "toggleAudioShortcut", name: "Toggle Audio Shortcut", note: "Set the shortcut to toggle audio sharing.", clearable: true, value: [] },
         ]},
@@ -41,7 +42,6 @@ const platform = process.platform;
 const ctrl = platform === "win32" ? 0xa2 : platform === "darwin" ? 0xe0 : 0x25;
 const keybindModule = Webpack.getModule(m => m.ctrl === ctrl, { searchExports: true });
 
-// Provide fallback if not found
 const fallbackKeybindModule = {
     'ctrl': 0xA2, 'shift': 0xA0, 'alt': 0xA4, 'meta': 0x5B,
     'right ctrl': 0xA3, 'right shift': 0xA1, 'right alt': 0xA5, 'right meta': 0x5C,
@@ -71,8 +71,12 @@ module.exports = class ShortcutScreenshareScreen {
         this.streamOptions = null;
 
         this.toggleStreamHandle = this.toggleStream.bind(this);
+        this.endStreamHandle = this.endStream.bind(this);
         this.toggleGameOrScreenHandle = this.toggleGameOrScreen.bind(this);
         this.toggleAudiohandle = this.toggleAudio.bind(this);
+
+        // For suppressing "Not currently streaming" toast if starting stream at the same instant
+        this.suppressNotStreamingToast = false;
 
         // Hotkey reliability patch: focus/visibility/periodic
         this._focusListener = this._onFocus.bind(this);
@@ -119,6 +123,7 @@ module.exports = class ShortcutScreenshareScreen {
                 this.setConfigSetting(id, value);
                 switch (id) {
                     case "toggleStreamShortcut":
+                    case "endStreamShortcut":
                     case "toggleGameOrScreenShortcut":
                     case "toggleAudioShortcut":
                         this.updateKeybinds();
@@ -142,7 +147,6 @@ module.exports = class ShortcutScreenshareScreen {
         this.initSettingsValues();
         this.updateKeybinds();
 
-        // --- PATCH: Hotkey reliability ---
         window.addEventListener("focus", this._focusListener);
         document.addEventListener("visibilitychange", this._visibilityListener);
         this._rebindInterval = setInterval(() => {
@@ -219,11 +223,25 @@ module.exports = class ShortcutScreenshareScreen {
         this.BdApi.showToast("Screenshare stopped!", {type: "info"});
     }
 
-    toggleStream() {
+    endStream() {
+        // Only stop the stream, do NOT start it if not streaming
         if (ApplicationStreamingStore.getCurrentUserActiveStream()) {
             this.stopStream();
-        } else {
-            this.startStream();
+        } else if (!this.suppressNotStreamingToast) {
+            this.BdApi.showToast("Not currently streaming.", {type: "info"});
+        }
+    }
+
+    toggleStream() {
+        // If we are suppressing the not-streaming toast, reset it after this call
+        try {
+            if (ApplicationStreamingStore.getCurrentUserActiveStream()) {
+                this.stopStream();
+            } else {
+                this.startStream();
+            }
+        } finally {
+            this.suppressNotStreamingToast = false;
         }
     }
 
@@ -275,14 +293,29 @@ module.exports = class ShortcutScreenshareScreen {
 
     updateKeybinds() {
         this.unregisterKeybinds();
-        let shortcuts = { toggleStreamShortcut: this.toggleStreamHandle, toggleGameOrScreenShortcut: this.toggleGameOrScreenHandle, toggleAudioShortcut: this.toggleAudiohandle };
+        let shortcuts = {
+            toggleStreamShortcut: this.toggleStreamHandle,
+            endStreamShortcut: () => {
+                // When this keybind is pressed, suppress the not-streaming toast only for the next toggleStream call
+                this.suppressNotStreamingToast = true;
+                this.endStream();
+            },
+            toggleGameOrScreenShortcut: this.toggleGameOrScreenHandle,
+            toggleAudioShortcut: this.toggleAudiohandle
+        };
 
+        let usedKeybinds = new Map();
         let i = 0;
         for (const [shortcutName, shortcutFunction] of Object.entries(shortcuts)) {
             if (Array.isArray(this.settings[shortcutName]) && this.settings[shortcutName].length > 0) {
                 const mappedKeybinds = this.mapKeybind(this.settings[shortcutName]);
                 for (const keybind of mappedKeybinds) {
+                    const keyString = JSON.stringify(keybind);
+                    if (usedKeybinds.has(keyString)) {
+                        continue;
+                    }
                     this.registerKeybind(TOGGLE_STREAM_KEYBIND + i, keybind, shortcutFunction);
+                    usedKeybinds.set(keyString, shortcutName);
                     i++;
                 }
             }
