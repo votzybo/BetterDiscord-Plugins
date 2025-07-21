@@ -4,18 +4,21 @@ Clean, fast in-app notifications with quick reply and quick action support.
 
 ## ⭐ Settings Showcase
 
-![Image](https://github.com/user-attachments/assets/edeb8777-46ff-45a1-af80-7a28105a7cd9)
+![Discord_frKpAj2xR6](https://github.com/user-attachments/assets/6fc47415-ea0e-4bb6-b19a-6a02fd34e02b)
 
 ## 💫 Plugin Showcase 
 
-![Image](https://github.com/user-attachments/assets/2c91ee32-997b-4524-9eb1-904f64f6c607)
+![Discord_1EunPEDlul-ezgif com-optimize](https://github.com/user-attachments/assets/c2b80f67-fd85-439f-b1f5-0947ab834d3b)
 
-![Image](https://github.com/user-attachments/assets/05b4be57-5507-4ac8-8edf-765637eead14)
-![Image](https://github.com/user-attachments/assets/14b0ad47-5094-439f-9b16-98ae2ccedfff)
+![Discord_64XUCiRNfP](https://github.com/user-attachments/assets/015caa86-ab59-4fef-a7b1-7689ba7c41e0)
+
+![explorer_mpUlExx9cG](https://github.com/user-attachments/assets/f7558569-369a-4bf1-aeb1-83418c8831b9)
 
 ## 🌟 Stacking Showcase
 
-![Image](https://github.com/user-attachments/assets/b2590f79-344b-487e-a6c2-f36bee104e95)
+![Discord_1EunPEDlul-ezgif com-optimize](https://github.com/user-attachments/assets/fd882cf1-0262-43f2-98e3-64246b143041)
+
+![explorer_mpUlExx9cG](https://github.com/user-attachments/assets/1f4d88e6-e721-4223-be48-2cac7eaf587b)
 
 ## ✨ Features
 
@@ -25,6 +28,8 @@ Clean, fast in-app notifications with quick reply and quick action support.
 - Scrollable quick action panel
 - Visible auto-close timer bar
 - Custom positioning, size, and duration
+- Custom color changing, glow effect, and translucency
+- Custom Quick Action Messages
 
 ## 📦 Installation
 
