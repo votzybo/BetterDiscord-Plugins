@@ -1,8 +1,8 @@
 /**
  * @name JumpToTopBottomPingUser
  * @author votzybo
- * @version 6.4.0
- * @description Navigation widget expands to the right of the upload button. "Jump to top" uses the exact router call as the working JumpToTop plugin. "Jump to present" simulates a click on the native button if visible, otherwise scrolls instantly to bottom. Mention/user jumps are instant. Toasts are centered above chat.
+ * @version 6.6.0
+ * @description Navigation widget mounts inside the chat input button container. "Jump to top" uses the exact router call as the working JumpToTop plugin. "Jump to present" clicks the native button if visible, otherwise scrolls instantly to bottom. Mention/user jumps are instant. Toasts are centered above chat.
  */
 
 const widgetId = "jump-to-top-bottom-ping-user-widget";
@@ -10,35 +10,38 @@ const widgetStyleId = "jump-to-top-bottom-ping-user-style";
 const highlightClass = "jump-highlight-temp";
 const toastId = "jump-toast";
 
-// Centered toast
+/* ---------------- Toast ---------------- */
 function showCenteredToast(message, duration = 2200) {
     const old = document.getElementById(toastId);
     if (old) old.remove();
     const toast = document.createElement('div');
     toast.id = toastId;
     toast.textContent = message;
-    toast.style.position = 'fixed';
-    toast.style.top = '80px';
-    toast.style.left = '50%';
-    toast.style.transform = 'translateX(-50%)';
-    toast.style.zIndex = '99999';
-    toast.style.background = 'var(--background-floating, #222)';
-    toast.style.color = 'var(--text-normal, #fff)';
-    toast.style.padding = '14px 32px';
-    toast.style.borderRadius = '8px';
-    toast.style.boxShadow = '0 4px 16px #0008';
-    toast.style.fontSize = '1.15em';
-    toast.style.fontWeight = 'bold';
-    toast.style.opacity = 0;
-    toast.style.transition = 'opacity 0.25s';
+    Object.assign(toast.style, {
+        position: "fixed",
+        top: "80px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: "99999",
+        background: "var(--background-floating, #222)",
+        color: "var(--text-normal, #fff)",
+        padding: "14px 32px",
+        borderRadius: "8px",
+        boxShadow: "0 4px 16px #0008",
+        fontSize: "1.15em",
+        fontWeight: "bold",
+        opacity: 0,
+        transition: "opacity 0.25s"
+    });
     document.body.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = 1; }, 10);
+    requestAnimationFrame(() => (toast.style.opacity = 1));
     setTimeout(() => {
         toast.style.opacity = 0;
         setTimeout(() => toast.remove(), 300);
     }, duration);
 }
 
+/* ---------------- Helpers ---------------- */
 function highlightMessage(node) {
     if (!node) return;
     node.classList.add(highlightClass);
@@ -71,23 +74,11 @@ function findMentioned() {
     ));
 }
 
-// Util: Get React instance for a DOM node
-function getReactInstance(node) {
-    for (const key in node) {
-        if (key.startsWith("__reactFiber$") || key.startsWith("__reactInternalInstance$"))
-            return node[key];
-    }
-    return null;
-}
-
-// Jump to present: prioritize DOM button click, fallback to instant scroll-to-bottom
+/* ---------------- Actions ---------------- */
 function jumpToPresent() {
-    // 1. Try clicking the real Jump To Present button in the DOM (most reliable)
+    // Prefer clicking Discord's native "Jump to Present" button if it is visible.
     const jumpBtn = Array.from(document.querySelectorAll('button'))
-        .find(btn =>
-            btn.textContent.trim().toLowerCase() === "jump to present" &&
-            btn.offsetParent !== null // visible
-        );
+        .find(btn => btn.textContent.trim().toLowerCase() === "jump to present" && btn.offsetParent !== null);
     if (jumpBtn) {
         jumpBtn.click();
         setTimeout(() => {
@@ -98,7 +89,7 @@ function jumpToPresent() {
         return;
     }
 
-    // 2. Fallback: instant scroll to the bottom and highlight
+    // Fallback: instant scroll to bottom.
     const scroller = findScroller();
     if (scroller) {
         scroller.scrollTop = scroller.scrollHeight;
@@ -112,11 +103,10 @@ function jumpToPresent() {
     }
 }
 
-// Jump to top using the exact proven JumpToTop plugin method
 function jumpToTopByTransitionTo() {
     let transitionTo;
     try {
-        transitionTo = BdApi.Webpack.getByStrings("transitionTo - Transitioning to", {searchExports: true});
+        transitionTo = BdApi.Webpack.getByStrings("transitionTo - Transitioning to", { searchExports: true });
     } catch (e) {}
     if (typeof transitionTo !== "function") {
         showCenteredToast("Discord router not found (transitionTo). Try reloading or updating BetterDiscord.", 2500);
@@ -125,7 +115,6 @@ function jumpToTopByTransitionTo() {
     transitionTo(location.pathname + "/0");
 }
 
-// Most recent mention (bottom-most)
 function scrollToMostRecentPing() {
     const pings = findMentioned();
     if (pings.length > 0) {
@@ -137,7 +126,6 @@ function scrollToMostRecentPing() {
     }
 }
 
-// Most recent own message (bottom-most)
 function scrollToMostRecentOwnMessage() {
     const ownMsgs = findOwnMessages();
     if (ownMsgs.length > 0) {
@@ -149,98 +137,70 @@ function scrollToMostRecentOwnMessage() {
     }
 }
 
+/* ---------------- UI ---------------- */
 function createWidget() {
-    const widget = document.createElement("div");
-    widget.id = widgetId;
-    widget.className = "jump-nav-widget";
-    widget.tabIndex = 0;
-    widget.style.display = "flex";
-    widget.style.alignItems = "center";
-    widget.style.position = "relative";
-    widget.style.zIndex = "10";
-    widget.style.marginLeft = "8px";
-    widget.style.height = "40px";
+    // Wrapper matches the pattern in the container (keeps spacing consistent)
+    const wrapper = document.createElement("div");
+    wrapper.id = widgetId;
+    wrapper.className = "buttonContainer__74017"; // harmless if class changes; our CSS still applies
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.gap = "8px";
+    wrapper.style.height = "44px";
+    wrapper.style.margin = "0 2px";
 
-    // Main button ("Jump to Present")
+    // Main button — same size & shape as Send
     const mainBtn = document.createElement("button");
     mainBtn.className = "jump-btn-main";
+    mainBtn.type = "button";
     mainBtn.title = "Jump to Present";
-    mainBtn.setAttribute("type", "button");
-    mainBtn.innerHTML = `<span class="jump-btn-icon" style="font-size:22px;color:white;display:flex;align-items:center;justify-content:center;height:100%;width:100%;">⇩</span>`;
-    Object.assign(mainBtn.style, {
-        background: "var(--background-secondary-alt, #2f3136)",
-        color: "white",
-        width: "40px",
-        height: "40px",
-        minWidth: "40px",
-        minHeight: "40px",
-        borderRadius: "50%",
-        border: "1px solid var(--background-tertiary, #4f545c)",
-        fontSize: "20px",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        boxShadow: "none",
-        outline: "none",
-        zIndex: "2",
-        transition: "box-shadow 0.1s, border 0.2s"
-    });
+    mainBtn.setAttribute("aria-label", "Jump to Present");
+    mainBtn.innerHTML = `<span class="jump-btn-icon">⇩</span>`;
     mainBtn.addEventListener("click", jumpToPresent);
 
-    // Button row (flex, expands on hover)
-    const btnRow = document.createElement("div");
-    btnRow.className = "jump-btn-row";
-    btnRow.innerHTML = `
-        <button class="jump-btn" title="Jump to Top" type="button">
-            <span style="font-size:20px;color:white;">↑</span>
-        </button>
-        <button class="jump-btn" title="Jump to Most Recent Mention" type="button">
-            <span style="font-size:18px;color:white;">@</span>
-        </button>
-        <button class="jump-btn" title="Jump to Most Recent Own Message" type="button">
-            <span style="font-size:19px;color:white;">&#128100;</span>
-        </button>
+    // Collapsible row
+    const row = document.createElement("div");
+    row.className = "jump-btn-row";
+    row.innerHTML = `
+        <button class="jump-btn" title="Jump to Top" type="button"><span>↑</span></button>
+        <button class="jump-btn" title="Jump to Most Recent Mention" type="button"><span>@</span></button>
+        <button class="jump-btn" title="Jump to Most Recent Own Message" type="button"><span>&#128100;</span></button>
     `;
-    btnRow.style.display = "flex";
-    btnRow.style.flexDirection = "row";
-    btnRow.style.alignItems = "center";
-    btnRow.style.gap = "8px";
-    btnRow.style.overflow = "hidden";
-    btnRow.style.maxWidth = "0px";
-    btnRow.style.opacity = "0";
-    btnRow.style.pointerEvents = "none";
-    btnRow.style.transition = "max-width 0.18s cubic-bezier(.4,1.4,.7,1), opacity 0.18s cubic-bezier(.4,1.4,.7,1)";
+    Object.assign(row.style, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        maxWidth: "0px",
+        opacity: "0",
+        pointerEvents: "none",
+        transition: "max-width 0.18s cubic-bezier(.4,1.4,.7,1), opacity 0.18s cubic-bezier(.4,1.4,.7,1)",
+        overflow: "hidden"
+    });
 
-    // Add click listeners to each
-    const [topBtn, pingBtn, userBtn] = btnRow.querySelectorAll("button");
+    const [topBtn, pingBtn, userBtn] = row.querySelectorAll("button");
     topBtn.addEventListener("click", jumpToTopByTransitionTo);
     pingBtn.addEventListener("click", scrollToMostRecentPing);
     userBtn.addEventListener("click", scrollToMostRecentOwnMessage);
 
-    function expandRow() {
-        btnRow.style.maxWidth = "120px";
-        btnRow.style.opacity = "1";
-        btnRow.style.pointerEvents = "all";
-        mainBtn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.10)";
-        mainBtn.style.borderColor = "var(--brand-experiment, #5865f2)";
+    function expand() {
+        row.style.maxWidth = "180px";
+        row.style.opacity = "1";
+        row.style.pointerEvents = "auto";
     }
-    function collapseRow() {
-        btnRow.style.maxWidth = "0px";
-        btnRow.style.opacity = "0";
-        btnRow.style.pointerEvents = "none";
-        mainBtn.style.boxShadow = "none";
-        mainBtn.style.borderColor = "var(--background-tertiary, #4f545c)";
+    function collapse() {
+        row.style.maxWidth = "0px";
+        row.style.opacity = "0";
+        row.style.pointerEvents = "none";
     }
 
-    widget.addEventListener("mouseenter", expandRow);
-    widget.addEventListener("mouseleave", collapseRow);
-    mainBtn.addEventListener("focus", expandRow);
-    mainBtn.addEventListener("blur", collapseRow);
+    wrapper.addEventListener("mouseenter", expand);
+    wrapper.addEventListener("mouseleave", collapse);
+    mainBtn.addEventListener("focus", expand);
+    mainBtn.addEventListener("blur", collapse);
 
-    widget.appendChild(mainBtn);
-    widget.appendChild(btnRow);
-    return widget;
+    wrapper.appendChild(mainBtn);
+    wrapper.appendChild(row);
+    return wrapper;
 }
 
 function injectStyle() {
@@ -248,72 +208,198 @@ function injectStyle() {
     const style = document.createElement("style");
     style.id = widgetStyleId;
     style.textContent = `
-#jump-to-top-bottom-ping-user-widget .jump-btn-main:active,
-#jump-to-top-bottom-ping-user-widget .jump-btn-row .jump-btn:active {
-    filter: brightness(0.9);
+#${widgetId} {
+    height: 44px;
+    flex-shrink: 0;
 }
-#jump-to-top-bottom-ping-user-widget .jump-btn-main:focus {
-    outline: 2px solid var(--brand-experiment);
-}
-#jump-to-top-bottom-ping-user-widget .jump-btn,
-#jump-to-top-bottom-ping-user-widget .jump-btn-main {
-    background: var(--background-secondary-alt, #2f3136);
-    border: 1px solid var(--background-tertiary, #4f545c);
-    padding: 0;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    border-radius: 50%;
+#${widgetId} .jump-btn-main {
+    background: var(--brand-experiment);
+    border: none;
+    height: 44px;
+    min-height: 44px;
+    width: 44px;
+    min-width: 44px;
+    border-radius: 50%; /* match Send button roundness */
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    outline: none;
-    box-shadow: none;
-    transition: filter 0.1s, box-shadow 0.1s, border 0.2s;
+    color: white;
+    font-size: 22px;
+    line-height: 1;
+    transition: background 0.2s;
 }
-#jump-to-top-bottom-ping-user-widget .jump-btn span {
+#${widgetId} .jump-btn-main:hover {
+    background: var(--brand-experiment-560);
+}
+#${widgetId} .jump-btn-main:active {
+    filter: brightness(0.95);
+}
+
+/* Main & sub buttons styled like Send (size/shape) */
+#${widgetId} .jump-btn-main,
+#${widgetId} .jump-btn {
+    background: var(--brand-experiment);
+    border: none;
+    padding: 0 16px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    outline: none;
+    transition: background 0.2s;
+}
+#${widgetId} .jump-btn-main:hover,
+#${widgetId} .jump-btn:hover {
+    background: var(--brand-experiment-560);
+}
+#${widgetId} .jump-btn-main:active,
+#${widgetId} .jump-btn:active {
+    filter: brightness(0.95);
+}
+#${widgetId} .jump-btn-main span,
+#${widgetId} .jump-btn span {
     display: flex;
     align-items: center;
     justify-content: center;
     color: white !important;
+    font-size: 20px;
 }
+
+/* Message highlight */
 .${highlightClass} {
     outline: 3px solid #ffe066 !important;
     box-shadow: 0 0 0 3px #ffe06699 !important;
     border-radius: 8px !important;
     transition: outline 0.2s, box-shadow 0.2s;
 }
-#jump-toast {
-    pointer-events: none;
-}
+
+/* Toast */
+#${toastId} { pointer-events: none; }
 `;
     document.head.appendChild(style);
+}
+
+/* ---------------- Mounting inside the button container ---------------- */
+function findButtonsContainer() {
+    // Prefer exact class if present
+    let el = document.querySelector('.buttons__74017');
+    if (el) return el;
+
+    // Fallbacks: any likely chat-input buttons container with known children
+    const candidates = Array.from(document.querySelectorAll('div[class*="buttons__"], div[class^="buttons_"]'));
+    return candidates.find(c =>
+        c.querySelector('.buttonContainer__74017') ||
+        c.querySelector('[aria-label="Open GIF picker"]') ||
+        c.querySelector('.emojiButton__74017') ||
+        c.querySelector('.channelAppLauncher_e6e74f')
+    ) || null;
 }
 
 function insertWidget() {
     if (document.getElementById(widgetId)) return;
     injectStyle();
-    const wrapper = document.querySelector(".attachWrapper__0923f");
-    const uploadBtn = wrapper && wrapper.querySelector("button");
-    if (wrapper && uploadBtn) {
-        wrapper.style.display = "flex";
-        wrapper.style.alignItems = "center";
-        const widget = createWidget();
-        if (uploadBtn.nextSibling) {
-            wrapper.insertBefore(widget, uploadBtn.nextSibling);
-        } else {
-            wrapper.appendChild(widget);
-        }
+
+    const container = findButtonsContainer();
+    if (!container) return;
+
+    const widget = createWidget();
+
+    // Find the Send button inside the container
+    const sendBtn = container.querySelector('button[type="submit"]');
+    if (sendBtn) {
+        // Insert Jump button directly *before* the Send button
+        container.insertBefore(widget, sendBtn);
+    } else {
+        // Fallback: append at the end
+        container.appendChild(widget);
     }
+
+    function insertWidget() {
+    if (document.getElementById("jumpToBottomBtn")) return;
+
+    injectStyle();
+
+    // Find the send button wrapper
+    let sendBtnWrapper = document.querySelector(
+        ".buttonContainer__67645 > button"
+    );
+
+    if (sendBtnWrapper) {
+        // Create Jump to Bottom button
+        let jumpBtn = document.createElement("button");
+        jumpBtn.id = "jumpToBottomBtn";
+        jumpBtn.className = sendBtnWrapper.className; // Match Discord's button styles
+        jumpBtn.setAttribute("aria-label", "Jump to Bottom");
+        jumpBtn.style.marginLeft = "4px"; // Small gap from send button
+
+        // Add Discord-style icon (chevron down circle)
+        jumpBtn.innerHTML = `
+            <svg x="0" y="0" class="icon_f6f7d8" aria-hidden="true" role="img" width="24" height="24" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 22C6.48 22 2 17.52 2 12S6.48 2 
+                    12 2s10 4.48 10 10-4.48 10-10 10zm0-18C7.59 
+                    4 4 7.59 4 12s3.59 8 8 8 8-3.59 8-8-3.59-8-8-8zm0 
+                    11l-5-5h10l-5 5z"></path>
+            </svg>
+        `;
+
+        // Insert after send button
+        sendBtnWrapper.parentElement.insertBefore(
+            jumpBtn,
+            sendBtnWrapper.nextSibling
+        );
+
+        // Add scroll-to-bottom behavior
+        jumpBtn.addEventListener("click", () => {
+            window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: "smooth",
+            });
+        });
+    }
+}
+    if (document.getElementById("jumpToBottomStyle")) return;
+
+    const style = document.createElement("style");
+    style.id = "jumpToBottomStyle";
+    style.textContent = `
+        #jumpToBottomBtn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--background-primary);
+            color: var(--interactive-normal);
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        #jumpToBottomBtn:hover {
+            background: var(--background-modifier-selected);
+            color: var(--interactive-hover);
+        }
+        #jumpToBottomBtn svg {
+            width: 24px;
+            height: 24px;
+        }
+    `;
+    document.head.appendChild(style);
+
+
+insertWidget();
+
 }
 
 function removeWidget() {
     const widget = document.getElementById(widgetId);
-    if (widget && widget.parentElement) {
-        widget.parentElement.removeChild(widget);
-    }
+    if (widget) widget.remove();
     const style = document.getElementById(widgetStyleId);
     if (style) style.remove();
     const toast = document.getElementById(toastId);
@@ -326,18 +412,19 @@ function observeAttachWrapper() {
     const observer = new MutationObserver(() => {
         if (!document.getElementById(widgetId)) insertWidget();
     });
-    observer.observe(root, {childList: true, subtree: true});
+    observer.observe(root, { childList: true, subtree: true });
     return observer;
 }
 
+/* ---------------- Plugin API ---------------- */
 let observerInstance = null;
 
 module.exports = class JumpToTopBottomPingUser {
     getName() { return "JumpToTopBottomPingUser"; }
     getDescription() {
-        return "Navigation widget expands to the right of the upload button. 'Jump to top' uses the exact router call as the working JumpToTop plugin. 'Jump to present' simulates a click on the native button if visible, otherwise scrolls instantly to bottom. Mention/user jumps are instant. Toasts are centered above chat.";
+        return "Navigation widget mounts in the chat input button container. 'Jump to top' uses router transitionTo. 'Jump to present' prefers the native button; otherwise scrolls instantly.";
     }
-    getVersion() { return "6.4.0"; }
+    getVersion() { return "6.6.0"; }
     getAuthor() { return "votzybo"; }
 
     start() {
