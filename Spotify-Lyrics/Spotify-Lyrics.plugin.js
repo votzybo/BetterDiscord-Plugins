@@ -1,12 +1,20 @@
 /**
  * @name SpotifyLyrics
  * @author votzybo
- * @version 5.7.7
- * @description SpotifyControls Plugin by DevilBro is needed!!! Sidebar lyrics panel: right-click for Expand (shows all lyrics), Large View (karaoke style), Custom View (set line count in settings), and Reload. You can set your default view in settings. Collapse returns to context lines (before/current/after). If a song is playing but no lyrics are found, displays 'No Lyrics Detected For Track'. Settings panel included. Now supports font size adjustment (right click) and music symbol for instrumental breaks.
+ * @version 5.9.4
+ * @description SpotifyControls Plugin by DevilBro is needed!!! Sidebar lyrics panel: right-click for Expand (shows all lyrics), Large View (karaoke style), Custom View (set line count in settings), and Reload. You can set your default view in settings. Collapse returns to context lines (before/current/after). If a song is playing but no lyrics are found, displays 'No Lyrics Detected For Track'. Settings panel included. Now supports font size adjustment (right click) and music symbol for instrumental breaks. NEW: you can now set your own background color for the lyrics panel!
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
  * @updateUrl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/main/SpotifyLyrics.plugin.js
+ */
+
+/*
+ * Dev Notes:
+ * - Background is pure black (#000) by default.
+ * - Change color in settings (text input) or right-click menu.
+ * - Setting accepts hex, rgb(), or named CSS colors.
+ * - All required methods included for error-free operation.
  */
 
 class SpotifyLyrics {
@@ -19,7 +27,8 @@ class SpotifyLyrics {
             customViewLines: 5,
             defaultView: "context",
             scrollbarStyle: "sleek",
-            lyricsFontSize: 15
+            lyricsFontSize: 15,
+            lyricsBgColor: "#000"
         };
         this.settings = BdApi.loadData("SpotifyLyrics", "settings") || { ...this.defaultSettings };
         for (const k in this.defaultSettings) {
@@ -46,11 +55,14 @@ class SpotifyLyrics {
         this._trackCheckInterval = null;
         this._fontSizeMenuPopout = null;
         this._fontSizePopoutClickawayListener = null;
+        this._bgColorMenuPopout = null;
+        this._bgColorPopoutClickawayListener = null;
+        this.interval = null;
     }
 
     getName() { return "SpotifyLyrics"; }
-    getDescription() { return "SpotifyControls Plugin by DevilBro is needed!!! Sidebar lyrics panel: right-click for Expand (shows all lyrics), Large View (karaoke style), Custom View (set line count in settings), and Reload. You can set your default view in settings. Collapse returns to context lines (before/current/after). If a song is playing but no lyrics are found, displays 'No Lyrics Detected For Track'. Settings panel included. Now supports font size adjustment (right click) and music symbol for instrumental breaks."; }
-    getVersion() { return "5.7.7"; }
+    getDescription() { return "SpotifyControls Plugin by DevilBro is needed!!! Sidebar lyrics panel: right-click for Expand (shows all lyrics), Large View (karaoke style), Custom View (set line count in settings), and Reload. Settings panel included. Now supports font size adjustment and custom background color!"; }
+    getVersion() { return "5.9.4"; }
     getAuthor() { return "votzybo"; }
 
     start() {
@@ -71,15 +83,19 @@ class SpotifyLyrics {
     stop() {
         this.removeStyle();
         this.removeLyricsPanel();
-        clearInterval(this.interval);
-        clearInterval(this._trackCheckInterval);
+        if (this.interval) clearInterval(this.interval);
+        if (this._trackCheckInterval) clearInterval(this._trackCheckInterval);
         this.clearLyricTimer();
         this.removeExpandPopout();
         this.removeFontSizeMenuPopout();
+        this.removeBgColorPopout();
         window.removeEventListener("keydown", this._onKeyDown);
     }
 
     injectStyle(force) {
+        let bgColor = this.settings.lyricsBgColor && this.settings.lyricsBgColor.trim() ? this.settings.lyricsBgColor.trim() : "#000";
+        let valid = /^#[a-fA-F0-9]{3,8}$/.test(bgColor) || /^rgb/.test(bgColor) || /^[a-zA-Z]+$/.test(bgColor);
+        if (!valid) bgColor = "#000";
         let scrollbarCSS = "";
         if (this.settings.scrollbarStyle === "hidden") {
             scrollbarCSS = `
@@ -119,7 +135,7 @@ class SpotifyLyrics {
         BdApi.clearCSS("SpotifyLyrics-style");
         BdApi.injectCSS("SpotifyLyrics-style", `
             .spotifylyrics-sidebarpanel {
-                background: var(--background-secondary, #232428);
+                background: ${bgColor} !important;
                 border-radius: 8px;
                 margin: 0 10px 8px 10px;
                 padding: 10px 10px 10px 10px;
@@ -159,7 +175,7 @@ class SpotifyLyrics {
                 font-weight: 400 !important;
             }
             .spotifylyrics-largeview .spotifylyrics-line.current {
-                color: #3399ff !important;
+                color: var(--brand-experiment, #3399ff);
                 opacity: 1 !important;
                 font-weight: 600 !important;
                 font-size: calc(var(--spotifylyrics-font-size, 15px) + 2px) !important;
@@ -216,7 +232,7 @@ class SpotifyLyrics {
                 position: absolute;
                 top: 4px;
                 right: 10px;
-                background: var(--background-accent, #4f545c);
+                background: var(--background-accent, var(--brand-experiment, #4f545c));
                 color: var(--header-primary, #fff);
                 border: none;
                 border-radius: 6px;
@@ -232,10 +248,10 @@ class SpotifyLyrics {
             .spotifylyrics-floating-btn.show {
                 display: block;
             }
-            .spotifylyrics-expand-popout, .spotifylyrics-fontsize-popout {
+            .spotifylyrics-expand-popout, .spotifylyrics-fontsize-popout, .spotifylyrics-bgcolor-popout {
                 position: fixed;
                 z-index: 9999;
-                background: var(--background-floating, #232428);
+                background: var(--background-floating, var(--background-primary, #232428));
                 color: var(--header-primary, #fff);
                 border: 1px solid var(--background-modifier-accent, #2F3136);
                 border-radius: 8px;
@@ -249,11 +265,11 @@ class SpotifyLyrics {
                 user-select: none;
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 8px;
                 animation: spotifylyrics-fadein .14s;
             }
             .spotifylyrics-expand-popout-btn, .spotifylyrics-fontsize-popout-btn {
-                background: var(--background-accent, #1db95422);
+                background: var(--background-accent, var(--brand-experiment, #1db95422));
                 color: var(--header-primary, #fff);
                 border: none;
                 border-radius: 6px;
@@ -277,7 +293,7 @@ class SpotifyLyrics {
                 display: flex;
                 flex-direction: column;
             }
-            .container_debb33 {
+            .container_791eb8 {
                 min-height: 0 !important;
                 max-height: unset !important;
             }
@@ -293,9 +309,50 @@ class SpotifyLyrics {
             BdApi.clearCSS("SpotifyLyrics-style");
     }
 
-    getPanelParent() { return document.querySelector('.panels_c48ade'); }
+    removeLyricsPanel() {
+        const existing = document.getElementById("spotifylyrics-panel");
+        if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+        }
+        this.currentPanel = null;
+        this.clearLyricTimer();
+        this.removeExpandPopout();
+        this.removeFontSizeMenuPopout();
+        this.removeBgColorPopout();
+    }
+
+    removeExpandPopout() {
+        if (this._panelReloadPopout && this._panelReloadPopout.parentNode)
+            this._panelReloadPopout.parentNode.removeChild(this._panelReloadPopout);
+        this._panelReloadPopout = null;
+        if (this._popoutClickawayListener)
+            document.removeEventListener("mousedown", this._popoutClickawayListener, true);
+        this._popoutClickawayListener = null;
+    }
+
+    removeFontSizeMenuPopout() {
+        if (this._fontSizeMenuPopout && this._fontSizeMenuPopout.parentNode)
+            this._fontSizeMenuPopout.parentNode.removeChild(this._fontSizeMenuPopout);
+        this._fontSizeMenuPopout = null;
+        if (this._fontSizePopoutClickawayListener)
+            document.removeEventListener("mousedown", this._fontSizePopoutClickawayListener, true);
+        this._fontSizePopoutClickawayListener = null;
+    }
+
+    removeBgColorPopout() {
+        if (this._bgColorMenuPopout && this._bgColorMenuPopout.parentNode)
+            this._bgColorMenuPopout.parentNode.removeChild(this._bgColorMenuPopout);
+        this._bgColorMenuPopout = null;
+        if (this._bgColorPopoutClickawayListener)
+            document.removeEventListener("mousedown", this._bgColorPopoutClickawayListener, true);
+        this._bgColorPopoutClickawayListener = null;
+    }
+
+    getPanelParent() {
+        return document.querySelector('.panels_c48ade');
+    }
     getSpotifyPanel() {
-        return document.querySelector('.container_791eb8.withTimeline_791eb8') || document.querySelector('.container_debb33');
+        return document.querySelector('.container_791eb8.withTimeline_791eb8');
     }
 
     applyDefaultView() {
@@ -309,10 +366,9 @@ class SpotifyLyrics {
 
     tryInject() {
         const parent = this.getPanelParent();
-        if (!parent) return;
         const spotifyPanel = this.getSpotifyPanel();
         const track = this.getTrackInfoFromDOM(spotifyPanel);
-        if (!spotifyPanel || !track || !track.name || !track.artist) {
+        if (!parent || !spotifyPanel || !track || !track.name) {
             this.removeLyricsPanel();
             return;
         }
@@ -367,7 +423,7 @@ class SpotifyLyrics {
         this.removeLyricsPanel();
         const spotifyPanel = this.getSpotifyPanel();
         const track = this.getTrackInfoFromDOM(spotifyPanel);
-        if (!track || !track.name || !track.artist) {
+        if (!track || !track.name) {
             this.clearLyricTimer();
             return null;
         }
@@ -378,7 +434,6 @@ class SpotifyLyrics {
         this.currentPanel = panelDiv;
         this.setPanelMaxHeight();
         this.setLargeViewClass();
-        // Set font size for all lyrics lines and no lyrics message
         panelDiv.style.setProperty("--spotifylyrics-font-size", `${this.settings.lyricsFontSize}px`);
         const lyricsDiv = document.createElement("div");
         lyricsDiv.className = "spotifylyrics-lyricslist";
@@ -397,41 +452,16 @@ class SpotifyLyrics {
         };
         panelDiv.appendChild(btn);
         this.floatingBtn = btn;
-        // Custom context menu
         panelDiv.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             this.showExpandPopout(e);
         });
-        // Add right click for font size (submenu)
-        panelDiv.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            this.showExpandPopout(e);
-        }, false);
-
-        // Add a listener for the expand popout to show the font size menu
-        this._expandPopoutFontHandler = (e) => {
-            const fontBtn = document.getElementById("spotifylyrics-fontsize-popout-trigger");
-            if (fontBtn) {
-                fontBtn.addEventListener("mouseenter", (evt) => {
-                    this.showFontSizePopout(fontBtn);
-                }, { once: true });
-                fontBtn.addEventListener("click", (evt) => {
-                    this.showFontSizePopout(fontBtn);
-                }, { once: true });
-            }
-        };
-        setTimeout(() => {
-            // In case popout is already open
-            this._expandPopoutFontHandler();
-        }, 0);
-
         panelDiv.addEventListener("wheel", () => this.onManualScroll());
         panelDiv.addEventListener("mousedown", () => this.onManualScroll());
         panelDiv.addEventListener("touchstart", () => this.onManualScroll());
-
         const trackName = track && typeof track.name === "string" ? track.name : "";
         const trackArtist = track && typeof track.artist === "string" ? track.artist : "";
-        if (!trackName && !trackArtist) {
+        if (!trackName) {
             this.clearLyricTimer();
             return null;
         }
@@ -477,23 +507,12 @@ class SpotifyLyrics {
         }
     }
 
-    removeLyricsPanel() {
-        const existing = document.getElementById("spotifylyrics-panel");
-        if (existing && existing.parentNode) {
-            existing.parentNode.removeChild(existing);
-        }
-        this.currentPanel = null;
-        this.clearLyricTimer();
-        this.removeExpandPopout();
-        this.removeFontSizeMenuPopout();
-    }
-
     showExpandPopout(e) {
         this.removeExpandPopout();
         this.removeFontSizeMenuPopout();
+        this.removeBgColorPopout();
         const popout = document.createElement("div");
         popout.className = "spotifylyrics-expand-popout";
-        // Font size menu button
         const fontBtn = document.createElement("button");
         fontBtn.className = "spotifylyrics-expand-popout-btn";
         fontBtn.id = "spotifylyrics-fontsize-popout-trigger";
@@ -508,7 +527,19 @@ class SpotifyLyrics {
             this.showFontSizePopout(fontBtn);
         };
         popout.appendChild(fontBtn);
-        // Large view option
+
+        // Background color picker
+        const colorBtn = document.createElement("button");
+        colorBtn.className = "spotifylyrics-expand-popout-btn";
+        colorBtn.textContent = `Background Color: ${this.settings.lyricsBgColor || "#000"} ▸`;
+        colorBtn.style.display = "flex";
+        colorBtn.style.alignItems = "center";
+        colorBtn.style.justifyContent = "space-between";
+        colorBtn.onclick = (ev) => {
+            this.showBgColorPopout(colorBtn);
+        };
+        popout.appendChild(colorBtn);
+
         const largeViewBtn = document.createElement("button");
         largeViewBtn.className = "spotifylyrics-expand-popout-btn";
         largeViewBtn.textContent = this._lyricsLargeView ? "Collapse Large View" : "Large View";
@@ -526,7 +557,7 @@ class SpotifyLyrics {
             this.removeExpandPopout();
         };
         popout.appendChild(largeViewBtn);
-        // Custom view option
+
         const customViewBtn = document.createElement("button");
         customViewBtn.className = "spotifylyrics-expand-popout-btn";
         customViewBtn.textContent = this._lyricsCustomView ? "Collapse Custom View" : "Custom View";
@@ -544,7 +575,7 @@ class SpotifyLyrics {
             this.removeExpandPopout();
         };
         popout.appendChild(customViewBtn);
-        // Expand/collapse option
+
         const expandBtn = document.createElement("button");
         expandBtn.className = "spotifylyrics-expand-popout-btn";
         expandBtn.textContent = this._lyricsExpanded ? "Collapse Lyrics" : "Expand Lyrics";
@@ -562,7 +593,7 @@ class SpotifyLyrics {
             this.removeExpandPopout();
         };
         popout.appendChild(expandBtn);
-        // Reload option
+
         const reloadBtn = document.createElement("button");
         reloadBtn.className = "spotifylyrics-expand-popout-btn";
         reloadBtn.textContent = "Reload Lyrics";
@@ -586,25 +617,127 @@ class SpotifyLyrics {
         let ignoreNext = true;
         const clickaway = ev => {
             if (ignoreNext) { ignoreNext = false; return; }
-            if (!popout.contains(ev.target) && !document.querySelector(".spotifylyrics-fontsize-popout")?.contains(ev.target)) {
+            if (
+                !popout.contains(ev.target) &&
+                !document.querySelector(".spotifylyrics-fontsize-popout")?.contains(ev.target) &&
+                !document.querySelector(".spotifylyrics-bgcolor-popout")?.contains(ev.target)
+            ) {
                 this.removeExpandPopout();
                 this.removeFontSizeMenuPopout();
+                this.removeBgColorPopout();
                 document.removeEventListener("mousedown", clickaway, true);
             }
         };
         document.addEventListener("mousedown", clickaway, true);
         this._popoutClickawayListener = clickaway;
         this._panelReloadPopout = popout;
-        setTimeout(() => this._expandPopoutFontHandler && this._expandPopoutFontHandler(), 0);
     }
 
-    removeExpandPopout() {
-        if (this._panelReloadPopout && this._panelReloadPopout.parentNode)
-            this._panelReloadPopout.parentNode.removeChild(this._panelReloadPopout);
-        this._panelReloadPopout = null;
-        if (this._popoutClickawayListener)
-            document.removeEventListener("mousedown", this._popoutClickawayListener, true);
-        this._popoutClickawayListener = null;
+    showBgColorPopout(triggerBtn) {
+        this.removeBgColorPopout();
+        const popout = document.createElement("div");
+        popout.className = "spotifylyrics-bgcolor-popout";
+        popout.style.position = "fixed";
+        popout.style.zIndex = 9999;
+        popout.style.background = "var(--background-floating, #232428)";
+        popout.style.color = "var(--header-primary, #fff)";
+        popout.style.border = "1px solid var(--background-modifier-accent, #2F3136)";
+        popout.style.borderRadius = "8px";
+        popout.style.boxShadow = "0 4px 24px rgba(0,0,0,0.30)";
+        popout.style.padding = "12px 18px 12px 18px";
+        popout.style.fontSize = "16px";
+        popout.style.fontWeight = "500";
+        popout.style.minWidth = "160px";
+        popout.style.minHeight = "36px";
+        popout.style.display = "flex";
+        popout.style.flexDirection = "column";
+        popout.style.gap = "8px";
+
+        const label = document.createElement("label");
+        label.textContent = "Background Color:";
+        label.style.fontWeight = "bold";
+        label.style.marginBottom = "6px";
+        popout.appendChild(label);
+
+        // Color input
+        const colorInput = document.createElement("input");
+        colorInput.type = "text";
+        colorInput.value = this.settings.lyricsBgColor || "#000";
+        colorInput.style.fontSize = "15px";
+        colorInput.style.padding = "6px";
+        colorInput.style.borderRadius = "6px";
+        colorInput.style.background = "var(--background-secondary)";
+        colorInput.style.color = "var(--header-primary)";
+        colorInput.style.border = "1px solid var(--background-modifier-accent)";
+        colorInput.style.marginBottom = "10px";
+        colorInput.placeholder = "#000, #a259dd, rgb(20,20,20), purple, etc";
+        popout.appendChild(colorInput);
+
+        // Color preview
+        const preview = document.createElement("div");
+        preview.textContent = "Preview";
+        preview.style.fontSize = "15px";
+        preview.style.marginBottom = "6px";
+        preview.style.background = colorInput.value;
+        preview.style.borderRadius = "6px";
+        preview.style.padding = "8px";
+        preview.style.color = "#fff";
+        preview.style.display = "block";
+        preview.style.textAlign = "center";
+        preview.style.border = "1px solid #333";
+        popout.appendChild(preview);
+
+        colorInput.oninput = () => {
+            preview.style.background = colorInput.value || "#000";
+        };
+
+        // Save button
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "spotifylyrics-fontsize-popout-btn";
+        saveBtn.textContent = "Save";
+        saveBtn.style.marginTop = "6px";
+        saveBtn.onclick = () => {
+            let val = colorInput.value.trim();
+            if (!val) val = "#000";
+            this.settings.lyricsBgColor = val;
+            BdApi.saveData("SpotifyLyrics", "settings", this.settings);
+            this.injectStyle(true);
+            this.updateLyricsDisplay(true);
+            this.removeBgColorPopout();
+            this.removeExpandPopout();
+        };
+        popout.appendChild(saveBtn);
+
+        // Reset button
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "spotifylyrics-fontsize-popout-btn";
+        resetBtn.textContent = "Reset to Black";
+        resetBtn.onclick = () => {
+            colorInput.value = "#000";
+            preview.style.background = "#000";
+        };
+        popout.appendChild(resetBtn);
+
+        document.body.appendChild(popout);
+        // Position next to triggerBtn
+        const rect = triggerBtn.getBoundingClientRect();
+        let x = rect.right + 8;
+        let y = rect.top;
+        if (x + popout.offsetWidth > window.innerWidth - 8) x = rect.left - popout.offsetWidth - 8;
+        if (y + popout.offsetHeight > window.innerHeight - 8) y = window.innerHeight - popout.offsetHeight - 8;
+        popout.style.left = x + "px";
+        popout.style.top = y + "px";
+        let ignoreNext = true;
+        const clickaway = ev => {
+            if (ignoreNext) { ignoreNext = false; return; }
+            if (!popout.contains(ev.target)) {
+                this.removeBgColorPopout();
+                document.removeEventListener("mousedown", clickaway, true);
+            }
+        };
+        document.addEventListener("mousedown", clickaway, true);
+        this._bgColorPopoutClickawayListener = clickaway;
+        this._bgColorMenuPopout = popout;
     }
 
     showFontSizePopout(triggerBtn) {
@@ -626,7 +759,6 @@ class SpotifyLyrics {
             popout.appendChild(btn);
         });
         document.body.appendChild(popout);
-        // Position next to triggerBtn
         const rect = triggerBtn.getBoundingClientRect();
         let x = rect.right + 8;
         let y = rect.top;
@@ -634,7 +766,6 @@ class SpotifyLyrics {
         if (y + popout.offsetHeight > window.innerHeight - 8) y = window.innerHeight - popout.offsetHeight - 8;
         popout.style.left = x + "px";
         popout.style.top = y + "px";
-        // Remove on click outside
         let ignoreNext = true;
         const clickaway = ev => {
             if (ignoreNext) { ignoreNext = false; return; }
@@ -648,15 +779,6 @@ class SpotifyLyrics {
         this._fontSizeMenuPopout = popout;
     }
 
-    removeFontSizeMenuPopout() {
-        if (this._fontSizeMenuPopout && this._fontSizeMenuPopout.parentNode)
-            this._fontSizeMenuPopout.parentNode.removeChild(this._fontSizeMenuPopout);
-        this._fontSizeMenuPopout = null;
-        if (this._fontSizePopoutClickawayListener)
-            document.removeEventListener("mousedown", this._fontSizePopoutClickawayListener, true);
-        this._fontSizePopoutClickawayListener = null;
-    }
-
     forceFullPluginReload() {
         this.stop();
         setTimeout(() => this.start(), 100);
@@ -664,12 +786,11 @@ class SpotifyLyrics {
 
     getTrackInfoFromDOM(panel) {
         if (!panel) return null;
-        const songDiv = panel.querySelector('.song_791eb8 .textScroller_72a89f > div') || panel.querySelector('.song_debb33 .textScroller_debb33 > div');
-        const artistDiv = panel.querySelector('.interpret_791eb8 .textScroller_72a89f > div') || panel.querySelector('.artist_debb33 .textScroller_debb33 > div');
-        if (songDiv && artistDiv) {
+        const songDiv = panel.querySelector('.song_791eb8 .textScroller_72a89f > div');
+        const artistDiv = panel.querySelector('.interpret_791eb8 .textScroller_72a89f > div');
+        if (songDiv) {
             const name = songDiv.textContent.trim();
-            let artist = artistDiv.textContent.trim();
-            if (artist.toLowerCase().startsWith('by ')) artist = artist.slice(3).trim();
+            let artist = artistDiv ? artistDiv.textContent.trim() : "";
             return { name, artist };
         }
         return null;
@@ -769,7 +890,7 @@ class SpotifyLyrics {
             if (lrcLines[i].time <= (elapsed - offsetSec)) idx = i;
             else break;
         }
-        const hash = (this.lastTrackId || "") + "|" + this._lyricsLargeView + "|" + this._lyricsExpanded + "|" + this._lyricsCustomView + "|" + this.settings.lyricsContextLines + "|" + this.settings.customViewLines + "|" + this.settings.lyricsFontSize;
+        const hash = (this.lastTrackId || "") + "|" + this._lyricsLargeView + "|" + this._lyricsExpanded + "|" + this._lyricsCustomView + "|" + this.settings.lyricsContextLines + "|" + this.settings.customViewLines + "|" + this.settings.lyricsFontSize + "|" + this.settings.lyricsBgColor;
         if (lyricsDiv._renderedForHash !== hash || forceUpdate) {
             lyricsDiv.innerHTML = "";
             if (this._lyricsLargeView || this._lyricsExpanded) {
@@ -824,10 +945,8 @@ class SpotifyLyrics {
         }
     }
 
-    // Instrumental break detection helper
     isInstrumentalLine(text) {
         if (!text) return false;
-        // Allow for lines like "(Instrumental)", "[Instrumental]", "Instrumental", "instrumental break", etc.
         return /^\s*[\(\[]?\s*instrumental(\s*break)?\s*[\)\]]?\s*$/i.test(text.trim());
     }
 
@@ -907,7 +1026,7 @@ class SpotifyLyrics {
     _pollForTrackChange() {
         const spotifyPanel = this.getSpotifyPanel();
         const track = this.getTrackInfoFromDOM(spotifyPanel);
-        if (!track || !track.name || !track.artist) return;
+        if (!track || !track.name) return;
         const newTrackId = `${track.name} - ${track.artist}`.toLowerCase();
         if (this.lastTrackId !== newTrackId) {
             this.removeLyricsPanel();
@@ -1024,7 +1143,6 @@ class SpotifyLyrics {
         ));
         panel.appendChild(this._makeNote("How many lines to show in Custom View."));
 
-        // Adjustable font size
         panel.appendChild(this._makeLabeledInput(
             "Lyrics Font Size (px)",
             this.settings.lyricsFontSize,
@@ -1039,6 +1157,21 @@ class SpotifyLyrics {
             "number", "10", "30", "1"
         ));
         panel.appendChild(this._makeNote("Adjust the font size of the lyrics (default: 15, range: 10-30)"));
+
+        panel.appendChild(this._makeLabeledInput(
+            "Lyrics Panel Background Color",
+            this.settings.lyricsBgColor || "#000",
+            v => {
+                let val = v.trim();
+                if (!val) val = "#000";
+                this.settings.lyricsBgColor = val;
+                BdApi.saveData("SpotifyLyrics", "settings", this.settings);
+                this.injectStyle(true);
+                this.updateLyricsDisplay(true);
+            },
+            "text"
+        ));
+        panel.appendChild(this._makeNote("Enter any valid CSS color (e.g. #000, #a259dd, rgb(20,20,20), purple, etc)."));
 
         return panel;
     }
