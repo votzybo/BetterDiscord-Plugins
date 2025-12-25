@@ -1,17 +1,12 @@
 /**
  * @name NotificationQuickReply
  * @author votzybo
- * @version 9.9.15
- * @description In-app notifications for Discord with quick reply, actions, customizable colors & bright glow, classic Discord layout. Server/group icon or sender avatar in header. Glow effect works and fades. Notifications clear if thread is opened or the message is marked as read (even on other devices).
+ * @version 9.9.18
+ * @description In-app notifications for Discord with quick reply, actions, customizable colors & bright glow. Fixes ReactDOM errors and restores Settings Panel.
  * @source https://github.com/votzybo/BetterDiscord-Plugins
  * @invite kQfQdg3JgD
  * @donate https://www.paypal.com/paypalme/votzybo
- * @updateurl https://raw.githubusercontent.com/votzybo/BetterDiscord-Plugins/refs/heads/main/AtSomeoneRoullette/AtSomeoneRoullette.plugin.js
  */
-
-// Hours Wasted: 225 (and yes, I counted the bajilliion extra hours i wasted adding the glow effect plugin. i sweear i couldnt wrap my head around it.)
-// If you see a weird bug, it's probably a feature. If you see a feature, it's probably a bug.
-// TODO: Refactor to be more modular in a distant future.
 
 const NQR_SETTINGS_KEY = "NQR_alert_settings";
 const NQR_DEFAULTS = {
@@ -43,28 +38,37 @@ const NQR_ANCHOR_OPTIONS = [
 ];
 const NQR_ACTIONS_LIMIT = 8;
 
-const { React, Webpack, ReactDOM } = BdApi;
+const { React, Webpack, ReactDOM: _ReactDOM } = BdApi;
 const { useState, useRef, useEffect } = React;
-const { createRoot } = ReactDOM;
-const AlertUtilModule = BdApi.Webpack.getByStrings("SUPPRESS_NOTIFICATIONS", "SELF_MENTIONABLE_SYSTEM", {searchExports:true});
+const createRoot = _ReactDOM && _ReactDOM.createRoot ? _ReactDOM.createRoot : null;
+
+const AlertUtilModule = BdApi.Webpack.getByStrings("SUPPRESS_NOTIFICATIONS", "SELF_MENTIONABLE_SYSTEM", { searchExports: true });
 const UserDB = Webpack.getStore("UserStore");
 const ChanDB = Webpack.getStore("ChannelStore");
 const GuildDB = Webpack.getStore("GuildStore");
-const navTo = Webpack.getByStrings(["transitionTo - Transitioning to"],{searchExports:true});
+const navTo = Webpack.getByStrings(["transitionTo - Transitioning to"], { searchExports: true });
 const MsgDispatcher = BdApi.Webpack.getByKeys("subscribe", "dispatch");
 const MessageDB = Webpack.getStore("MessageStore");
 const ChanCache = Webpack.getModule(Webpack.Filters.byPrototypeKeys("addCachedMessages"));
 const msgStructFactory = Webpack.getModule(Webpack.Filters.byStrings("message_reference", "isProbablyAValidSnowflake"), { searchExports: true });
 const SelectedChannelStore = Webpack.getStore("SelectedChannelStore");
 
-// Helper to cache a message. Because Discord sometimes likes to play hide and seek with message objects.
+// Helper to cache a message.
 function cacheMsg(msg) {
-    const chan = ChanCache.getOrCreate(msg.channel_id);
-    const updated = chan.mutate(r => { r.ready = true; r.cached = true; r._map[msg.id] = msg; });
-    ChanCache.commit(updated);
+    try {
+        const chan = ChanCache.getOrCreate(msg.channel_id);
+        const updated = chan.mutate(r => { r.ready = true; r.cached = true; r._map[msg.id] = msg; });
+        ChanCache.commit(updated);
+    } catch (e) { /* ignore */ }
 }
 
-// ProgressBar: The most stressful countdown ever.
+// Robust Nonce Generator
+function generateNonce() {
+    return ((BigInt(Date.now()) - 1420070400000n) << 22n).toString();
+}
+
+/* -------------------- UI components -------------------- */
+
 function ProgressBar({ duration, isPaused, onComplete, showTimer, setHeaderTimer, barColor, timerColor, onProgress }) {
     const [remaining, setRemaining] = useState(duration);
     const [userPaused, setUserPaused] = useState(false);
@@ -130,7 +134,29 @@ function ProgressBar({ duration, isPaused, onComplete, showTimer, setHeaderTimer
     );
 }
 
-// Main notification component. If you touch this, you get what you deserve.
+function NQRSlider({ min, max, step, value, onChange, width = 160, disabled }) {
+    return React.createElement("input", {
+        type: "range", min, max, step, value, disabled,
+        style: { width, accentColor: "#ad4df0", marginRight: 12, verticalAlign: "middle" },
+        onChange: e => onChange(Number(e.target.value))
+    });
+}
+function NQRToggle({ checked, onChange }) {
+    return React.createElement("label", { style: { display: "inline-block", position: "relative", width: 38, height: 22, verticalAlign: "middle" } },
+        React.createElement("input", { type: "checkbox", checked, onChange: e => onChange(e.target.checked), style: { display: "none" } }),
+        React.createElement("span", { style: { position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0, background: checked ? "#ad4df0" : "#40444b", borderRadius: 22, transition: ".2s" } }),
+        React.createElement("span", { style: { position: "absolute", top: 2, left: checked ? 18 : 2, width: 18, height: 18, background: "#fff", borderRadius: "50%", transition: ".2s" } })
+    );
+}
+function NQRDropdown({ options, value, onChange, width = 160 }) {
+    return React.createElement("select", {
+        value, onChange: e => onChange(e.target.value),
+        style: { fontSize: 15, borderRadius: 6, background: "var(--background-secondary)", color: "var(--header-primary)", border: "1px solid #ad4df0", padding: "5px 12px", width, marginLeft: 0 }
+    }, options.map(opt => React.createElement("option", { key: opt.value, value: opt.value }, opt.label)));
+}
+
+/* -------------------- Notification UI -------------------- */
+
 function NotificationComponent(props) {
     const {
         message: propMessage,
@@ -151,15 +177,17 @@ function NotificationComponent(props) {
         barColor = "#ad4df0",
         timerColor = "#ad4df0",
         showServerGCProfilePic = true,
-        showDMHeaderAvatar = true
+        showDMHeaderAvatar = true,
+        backgroundColor = "",
+        isTest = false
     } = props;
 
     const useStateFromStores = Webpack.getModule(Webpack.Filters.byStrings("getStateFromStores"), { searchExports: true });
     const MessageStore = Webpack.getStore("MessageStore");
     const GuildStore = Webpack.getStore("GuildStore");
-    const Message = Webpack.getModule(m => String(m.type).includes('.messageListItem,"aria-setsize":-1,children:['));
+    const Message = Webpack.getModule(m => String(m.type).includes('.messageListItem,"aria-setsize":-1,children:['), { searchExports: true });
     const oldMsg = useRef({ message: propMessage, deleted: false });
-    let message = useStateFromStores ? useStateFromStores([MessageStore], function () {
+    let message = useStateFromStores && !isTest ? useStateFromStores([MessageStore], function () {
         const m = MessageStore.getMessage(propMessage.channel_id, propMessage.id);
         if (m) oldMsg.current = { message: m };
         else oldMsg.current.deleted = true;
@@ -167,10 +195,10 @@ function NotificationComponent(props) {
     }) : propMessage;
     message = message ? message : oldMsg.current.message;
 
-    if (!channel) return null;
-    const guild = channel.guild_id ? GuildStore.getGuild(channel.guild_id) : null;
-    const isGuild = !!channel.guild_id;
-    const isGroupDM = channel.type === 3;
+    if (!channel && !isTest) return null;
+    const guild = channel && channel.guild_id ? GuildStore.getGuild(channel.guild_id) : null;
+    const isGuild = !!(channel && channel.guild_id);
+    const isGroupDM = channel && channel.type === 3;
     const isDM = !isGuild && !isGroupDM;
 
     const [isPaused, setIsPaused] = useState(false);
@@ -194,17 +222,38 @@ function NotificationComponent(props) {
         BdApi.Data.save('PingNotification', "votzybo_quickactions_tooltip_shown", true);
     }
     function stopBubble(e) { e.stopPropagation(); }
+    
+    // UPDATED sendReply FUNCTION
     async function sendReply() {
         if (!replyValue.trim()) return;
         setSending(true);
         setErrorBanner("");
         try {
-            const SendMessageModule = Webpack.getModule(m => m?.sendMessage && m?.receiveMessage);
-            if (SendMessageModule && channel && channel.id) {
-                await SendMessageModule.sendMessage(channel.id, {
-                    content: replyValue,
-                    tts: false
-                });
+            const MessageActions = Webpack.getByKeys("sendMessage", "sendBotMessage");
+            
+            if (MessageActions && channel && channel.id) {
+                const nonce = generateNonce();
+                
+                await MessageActions.sendMessage(
+                    channel.id, 
+                    {
+                        content: replyValue,
+                        tts: false,
+                        nonce: nonce,
+                        invalidEmojis: [],
+                        validNonShortcutEmojis: [],
+                        message_reference: {
+                            message_id: message.id,
+                            channel_id: channel.id,
+                            guild_id: guild ? guild.id : undefined,
+                            fail_if_not_exists: false
+                        }
+                    },
+                    undefined, // Argument 3 (Promise/Completion)
+                    {}         // Argument 4 (Options) - CRITICAL: Prevents undefined access errors
+                );
+            } else {
+                throw new Error("MessageActions module not found");
             }
             setReplyValue("");
             onClose && onClose(true);
@@ -213,6 +262,7 @@ function NotificationComponent(props) {
                 typeof e === "object" && e?.message && typeof e.message === "string"
                     ? e.message
                     : String(e);
+            console.error("NQR Reply Error:", e);
             if (
                 errorMsg.includes("50013") ||
                 errorMsg.toLowerCase().includes("missing permissions") ||
@@ -259,8 +309,8 @@ function NotificationComponent(props) {
     }, []);
 
     const effectiveGlow = Math.max(0, Math.min(1, glowIntensity)) * progress;
-    const rgb = glowColor.startsWith("#")
-        ? [parseInt(glowColor.slice(1,3),16), parseInt(glowColor.slice(3,5),16), parseInt(glowColor.slice(5,7),16)]
+    const rgb = glowColor && glowColor.startsWith && glowColor.startsWith("#")
+        ? [parseInt(glowColor.slice(1, 3), 16), parseInt(glowColor.slice(3, 5), 16), parseInt(glowColor.slice(5, 7), 16)]
         : [173, 77, 240];
     const boxShadow = effectiveGlow > 0
         ? `0 0 ${72 + 72 * effectiveGlow}px 0 rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(0.60 + 0.40 * effectiveGlow).toFixed(2)})`
@@ -268,24 +318,29 @@ function NotificationComponent(props) {
 
     let showHeaderAvatar = false;
     let headerAvatarUrl = "";
-    if (isGuild && showServerGCProfilePic && guild && guild.icon) {
-        showHeaderAvatar = true;
-        headerAvatarUrl = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`;
-    } else if (isGroupDM && showServerGCProfilePic && channel.icon) {
-        showHeaderAvatar = true;
-        headerAvatarUrl = `https://cdn.discordapp.com/channel-icons/${channel.id}/${channel.icon}.png?size=64`;
-    } else if (isDM && showDMHeaderAvatar) {
-        showHeaderAvatar = true;
-        headerAvatarUrl = message.author?.avatar
-            ? `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png?size=128`
-            : `https://cdn.discordapp.com/embed/avatars/${parseInt(message.author.discriminator) % 5}.png`;
+    if (!isTest) {
+        if (isGuild && showServerGCProfilePic && guild && guild.icon) {
+            showHeaderAvatar = true;
+            headerAvatarUrl = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`;
+        } else if (isGroupDM && showServerGCProfilePic && channel.icon) {
+            showHeaderAvatar = true;
+            headerAvatarUrl = `https://cdn.discordapp.com/channel-icons/${channel.id}/${channel.icon}.png?size=64`;
+        } else if (isDM && showDMHeaderAvatar) {
+            showHeaderAvatar = true;
+            headerAvatarUrl = message.author?.avatar
+                ? `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png?size=128`
+                : `https://cdn.discordapp.com/embed/avatars/${parseInt(message.author.discriminator) % 5}.png`;
+        }
+    } else {
+        headerAvatarUrl = message.author?.avatar ? `https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png?size=128` : null;
+        showHeaderAvatar = !!headerAvatarUrl;
     }
 
     return (
         React.createElement('div', {
             className: `ping-notification-content`,
             onClick: (e) => {
-                const isLink = e.target.tagName === 'A' || e.target.closest('a');
+                const isLink = e.target.tagName === 'A' || e.target.closest && e.target.closest('a');
                 if (isLink) {
                     e.stopPropagation();
                     if (settings.disableMediaInteraction) {
@@ -294,13 +349,13 @@ function NotificationComponent(props) {
                     }
                     return;
                 }
-                onClick();
+                onClick && onClick();
             },
             onContextMenu: (e) => {
-                if (settings.closeOnRightClick) {
+                if (settings && settings.closeOnRightClick) {
                     e.preventDefault();
                     e.stopPropagation();
-                    onClose(true);
+                    onClose && onClose(true);
                 }
             },
             onMouseEnter: () => setIsPaused(true),
@@ -315,7 +370,7 @@ function NotificationComponent(props) {
                 width: `${width}px`,
                 display: 'flex',
                 flexDirection: 'column',
-                backgroundColor: 'var(--background-floating, var(--background-secondary))',
+                backgroundColor: backgroundColor ? backgroundColor : 'var(--background-floating, var(--background-secondary))',
                 backdropFilter: 'blur(10px)',
                 borderRadius: '12px',
                 transform: 'translateZ(0)',
@@ -323,7 +378,7 @@ function NotificationComponent(props) {
                 transition: 'all 0.3s ease',
                 userSelect: 'none',
                 WebkitUserDrag: 'none',
-                zIndex: settings.disableMediaInteraction ? 2 : 'auto',
+                zIndex: settings && settings.disableMediaInteraction ? 2 : 'auto',
                 '--ping-notification-content-font-size': `${fontSize}px`,
                 boxShadow
             }
@@ -360,7 +415,10 @@ function NotificationComponent(props) {
                         minWidth: 0
                     }
                 },
-                    isGuild ? [
+                    isTest ? [
+                        React.createElement('span', { key: "testtitle", style: { fontWeight: 700 } }, message.author?.username || "TestUser"),
+                        React.createElement('span', { key: "testlabel", style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 0 } }, message.channelName || "test-chat")
+                    ] : (isGuild ? [
                         React.createElement('span', { key: "guild", style: { fontWeight: 700 } }, guild?.name || "Server"),
                         React.createElement('span', { key: "chan", style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 0 } }, `#${channel.name}`)
                     ] :
@@ -368,9 +426,9 @@ function NotificationComponent(props) {
                             React.createElement('span', { key: "gc", style: { fontWeight: 700 } }, channel.name || "Group DM"),
                             React.createElement('span', { key: "gclabel", style: { color: 'var(--text-muted)', fontWeight: 400, fontSize: '13px', marginLeft: 0 } }, "Group Chat")
                         ] :
-                            React.createElement('span', { style: { fontWeight: 700 } }, message.author?.username)
+                            React.createElement('span', { style: { fontWeight: 700 } }, message.author?.username))
                 ),
-                settings.showCountdown && React.createElement('span', {
+                settings && settings.showCountdown && React.createElement('span', {
                     style: {
                         position: 'absolute',
                         right: 36,
@@ -388,7 +446,7 @@ function NotificationComponent(props) {
                     className: "ping-notification-close",
                     onClick: (e) => {
                         e.stopPropagation();
-                        onClose(true);
+                        onClose && onClose(true);
                     },
                     style: {
                         marginLeft: 'auto',
@@ -432,11 +490,12 @@ function NotificationComponent(props) {
                 },
                 errorBanner
             ),
+
             React.createElement('div', {
                 className: "ping-notification-body",
                 style: {
                     flex: 1,
-                    marginTop: 4,
+                    marginTop: 8,
                     marginBottom: 8,
                     maxHeight: 'unset',
                     overflowY: 'auto',
@@ -444,46 +503,45 @@ function NotificationComponent(props) {
                     padding: 0,
                     position: 'relative'
                 }
-            }, [
-                React.createElement('ul', {
+            },
+                isTest ? React.createElement('div', {
+                    style: {
+                        padding: '12px 8px',
+                        color: 'var(--text-normal)',
+                        fontSize: `${Math.max(13, fontSize)}px`,
+                        lineHeight: 1.4,
+                        whiteSpace: 'pre-wrap'
+                    }
+                }, message.content) : React.createElement('ul', {
                     key: "message-list",
                     style: {
                         listStyle: 'none',
                         margin: 0,
                         padding: 0,
-                        pointerEvents: settings.disableMediaInteraction ? 'none' : 'auto'
+                        pointerEvents: settings && settings.disableMediaInteraction ? 'none' : 'auto'
                     },
                 },
                     (() => {
-                        const props = {
-                            id: `${message.id}-${message.id}`,
-                            groupId: message.id,
-                            channel: channel,
-                            message: message,
-                            compact: false,
-                            renderContentOnly: false,
-                            className: "ping-notification-messageContent",
-                            hideAvatar: true, renderAvatar: false, showAvatar: false
-                        };
-                        return React.createElement(Message, props);
+                        try {
+                            const props = {
+                                id: `${message.id}-${message.id}`,
+                                groupId: message.id,
+                                channel: channel,
+                                message: message,
+                                compact: false,
+                                renderContentOnly: false,
+                                className: "ping-notification-messageContent",
+                                hideAvatar: true, renderAvatar: false, showAvatar: false
+                            };
+                            return React.createElement(Message, props);
+                        } catch (e) {
+                            return React.createElement('div', { style: { padding: '12px 8px', color: 'var(--text-normal)' } }, message.content || "[Unable to render message]");
+                        }
                     })()
-                ),
-                settings.disableMediaInteraction ? React.createElement('div', {
-                    key: "click-overlay",
-                    style: {
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        zIndex: 10,
-                        cursor: 'pointer',
-                        backgroundColor: 'transparent'
-                    },
-                    onClick: onClick
-                }) : null
-            ]),
-            quickReplyEnabled && React.createElement('div', {
+                )
+            ),
+
+            quickReplyEnabled && !isTest && React.createElement('div', {
                 className: 'ping-notification-quickreply-wrapper',
                 style: { display: "flex", position: "relative", paddingBottom: 0, minHeight: 52 }
             },
@@ -576,16 +634,18 @@ function NotificationComponent(props) {
                     }
                 }, sending ? "..." : "Send")
             ),
+
             React.createElement(ProgressBar, {
                 duration: settings.duration,
                 isPaused: isPaused || replyFocused,
-                onComplete: () => onClose(false),
+                onComplete: () => onClose && onClose(false),
                 showTimer: settings.showCountdown,
                 setHeaderTimer: setHeaderTimer,
                 barColor,
                 timerColor,
                 onProgress: setProgress
             }),
+
             isKeywordMatch && matchedKeyword && settings.showKeyword && React.createElement('div', {
                 style: {
                     position: 'absolute',
@@ -599,7 +659,8 @@ function NotificationComponent(props) {
                     fontSize: '10px'
                 }
             }, `Keyword: ${matchedKeyword}`),
-            quickActionsHover && quickActionsMenuPos && ReactDOM.createPortal(
+
+            quickActionsHover && quickActionsMenuPos && _ReactDOM.createPortal(
                 React.createElement("div", {
                     style: {
                         position: "fixed",
@@ -612,7 +673,8 @@ function NotificationComponent(props) {
                         borderRadius: "8px",
                         boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
                         padding: "8px 0",
-                        zIndex: 10020,
+                        // Dropdown Z-Index Higher than Notification
+                        zIndex: 2147483648,
                         overflowY: "auto",
                         overflowX: "hidden",
                         transition: "all .18s cubic-bezier(.4,1,.7,1.2)"
@@ -643,31 +705,10 @@ function NotificationComponent(props) {
     );
 }
 
-// Sliders, toggles, and dropdowns. Not responsible for your broken mouse wheel.
-function NQRSlider({ min, max, step, value, onChange, width = 160, disabled }) {
-    return React.createElement("input", {
-        type: "range", min, max, step, value, disabled,
-        style: { width, accentColor: "#ad4df0", marginRight: 12, verticalAlign: "middle" },
-        onChange: e => onChange(Number(e.target.value))
-    });
-}
-function NQRToggle({ checked, onChange }) {
-    return React.createElement("label", { style: { display: "inline-block", position: "relative", width: 38, height: 22, verticalAlign: "middle" } },
-        React.createElement("input", { type: "checkbox", checked, onChange: e => onChange(e.target.checked), style: { display: "none" } }),
-        React.createElement("span", { style: { position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0, background: checked ? "#ad4df0" : "#40444b", borderRadius: 22, transition: ".2s" } }),
-        React.createElement("span", { style: { position: "absolute", top: 2, left: checked ? 18 : 2, width: 18, height: 18, background: "#fff", borderRadius: "50%", transition: ".2s" } })
-    );
-}
-function NQRDropdown({ options, value, onChange, width = 160 }) {
-    return React.createElement("select", {
-        value, onChange: e => onChange(e.target.value),
-        style: { fontSize: 15, borderRadius: 6, background: "var(--background-secondary)", color: "var(--header-primary)", border: "1px solid #ad4df0", padding: "5px 12px", width, marginLeft: 0 }
-    }, options.map(opt => React.createElement("option", { key: opt.value, value: opt.value }, opt.label)));
-}
+/* -------------------- Settings Panel -------------------- */
 
-// Settings panel. If you break it, you get to keep both pieces.
 function NQRSettingsPanel({ plugin, onClose }) {
-    const [state, setState] = React.useState(plugin.nqrUserSettings);
+    const [state, setState] = React.useState(plugin.nqrUserSettings || {});
     const [actionInput, setActionInput] = React.useState("");
     const update = (prop, val) => {
         const updated = { ...state, [prop]: val };
@@ -675,8 +716,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
         plugin.saveNQRSettings(updated);
     };
     const addAction = () => {
-        if (!actionInput.trim() || state.actionSymbols.length >= NQR_ACTIONS_LIMIT) return;
-        const arr = [...state.actionSymbols, actionInput.trim()];
+        if (!actionInput.trim() || (state.actionSymbols && state.actionSymbols.length >= NQR_ACTIONS_LIMIT)) return;
+        const arr = [...(state.actionSymbols || []), actionInput.trim()];
         update("actionSymbols", arr);
         setActionInput("");
     };
@@ -702,6 +743,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                 React.createElement("div", { style: { color: "var(--text-muted)", marginBottom: 24, fontSize: 14 } },
                     "Tailor your popups, quick reply, and more."
                 ),
+
+                /* -- Alert Lifetime -- */
                 React.createElement("div", { style: { marginBottom: 16 } },
                     React.createElement("label", { style: { fontWeight: 500 } }, "Alert Lifetime"),
                     React.createElement("div", { style: { display: "flex", alignItems: "center" } },
@@ -720,6 +763,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                         React.createElement("span", { style: { color: "var(--text-muted)", marginLeft: 6 } }, "seconds")
                     )
                 ),
+
+                /* -- Show Countdown -- */
                 React.createElement("div", { style: { marginBottom: 14, display: "flex", alignItems: "center" } },
                     React.createElement("label", { style: { fontWeight: 500, marginRight: 12 } }, "Show Countdown & Progress"),
                     React.createElement(NQRToggle, {
@@ -727,6 +772,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                         onChange: v => update("showCountdown", v)
                     })
                 ),
+
+                /* -- Width / Max Height / Anchor -- */
                 React.createElement("div", { style: { marginBottom: 16 } },
                     React.createElement("label", { style: { fontWeight: 500 } }, "Alert Width"),
                     React.createElement("div", { style: { display: "flex", alignItems: "center" } },
@@ -772,6 +819,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                         width: 180
                     })
                 ),
+
+                /* -- Colors / Glow -- */
                 React.createElement("div", { style: { marginBottom: 18 } },
                     React.createElement("label", { style: { fontWeight: 500, marginRight: 14 } }, "Background Color"),
                     React.createElement("input", {
@@ -814,6 +863,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                     }),
                     React.createElement("span", { style: { color: "var(--text-muted)", marginLeft: 6 } }, (state.glowIntensity * 100).toFixed(0) + "%")
                 ),
+
+                /* -- Avatar toggles -- */
                 React.createElement("div", { style: { marginBottom: 14, display: "flex", alignItems: "center" } },
                     React.createElement("label", { style: { fontWeight: 500, marginRight: 12 } }, "Show Server / GC Profile Picture"),
                     React.createElement(NQRToggle, {
@@ -830,6 +881,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
                     }),
                     React.createElement("span", { style: { color: "var(--text-muted)", marginLeft: 12, fontSize: 14 } }, "Show avatar in header for DMs")
                 ),
+
+                /* -- TEST button -- */
                 React.createElement("button", {
                     onClick: () => {
                         const testMsg = {
@@ -837,17 +890,20 @@ function NQRSettingsPanel({ plugin, onClose }) {
                             channel_id: "0",
                             author: { id: "0", username: "TestUser", avatar: null, discriminator: "0000", globalName: "TestUser" },
                             content: "This is a test alert! Try quick reply and actions. Adjust settings and test again.",
-                            timestamp: new Date().toISOString()
+                            timestamp: new Date().toISOString(),
+                            channelName: "test-chat"
                         };
                         const testChan = { id: "0", name: "test-chat", recipients: [], type: 1, nsfw: false, nsfw_: false };
                         plugin.spawnAlertBox(testMsg, testChan, { test: true });
                     },
                     style: { background: "#ad4df0", color: "#fff", fontWeight: 700, fontSize: 16, padding: "10px 0", border: "none", borderRadius: 7, margin: "0 0 10px 0", width: "240px", boxShadow: "0 2px 8px #ad4df018" }
                 }, "Send Test Alert"),
+
                 React.createElement("div", {
                     style: { color: "#ed4245", margin: "0 0 30px 0", fontSize: 13, fontWeight: 700 }
-                }, "Test Alert not yet implemented for all features.")
+                }, "Test Alert is a mimic and won't send a real message.")
             ),
+
             React.createElement("div", { style: { borderTop: "1px solid var(--background-tertiary)", padding: "32px 38px 0 38px", marginTop: 6 } },
                 React.createElement("div", { style: { fontWeight: 700, fontSize: 17, marginBottom: 8 } }, "Quick Reply & Action Buttons"),
                 React.createElement("div", { style: { marginBottom: 16, display: "flex", alignItems: "center" } },
@@ -866,9 +922,9 @@ function NQRSettingsPanel({ plugin, onClose }) {
                     React.createElement("span", { style: { color: "var(--text-muted)", marginLeft: 12, fontSize: 14 } }, "Send action instantly when clicked")
                 ),
                 React.createElement("div", { style: { fontWeight: 500, marginBottom: 4 } }, `Action Buttons (max ${NQR_ACTIONS_LIMIT}):`),
-                state.actionSymbols.length === 0 ?
+                (state.actionSymbols || []).length === 0 ?
                     React.createElement("div", { style: { color: "var(--text-muted)", marginBottom: 8, marginTop: 4 } }, "No actions set.") :
-                    state.actionSymbols.map((qa, idx) =>
+                    (state.actionSymbols || []).map((qa, idx) =>
                         React.createElement("div", {
                             key: idx,
                             style: { display: "flex", alignItems: "center", marginBottom: 10, marginTop: 6, gap: 16 }
@@ -876,7 +932,7 @@ function NQRSettingsPanel({ plugin, onClose }) {
                             React.createElement("span", { style: { fontSize: 18, minWidth: 32 } }, qa),
                             React.createElement("button", {
                                 onClick: () => {
-                                    const arr = state.actionSymbols.slice();
+                                    const arr = (state.actionSymbols || []).slice();
                                     arr.splice(idx, 1);
                                     update("actionSymbols", arr);
                                 },
@@ -899,10 +955,10 @@ function NQRSettingsPanel({ plugin, onClose }) {
                         style: {
                             background: "#ad4df0", color: "#fff", fontWeight: 700, fontSize: 15, padding: "4px 18px",
                             border: "none", borderRadius: 7,
-                            cursor: actionInput.trim() && state.actionSymbols.length < NQR_ACTIONS_LIMIT ? "pointer" : "not-allowed",
-                            opacity: actionInput.trim() && state.actionSymbols.length < NQR_ACTIONS_LIMIT ? 1 : 0.6
+                            cursor: actionInput.trim() && (state.actionSymbols || []).length < NQR_ACTIONS_LIMIT ? "pointer" : "not-allowed",
+                            opacity: actionInput.trim() && (state.actionSymbols || []).length < NQR_ACTIONS_LIMIT ? 1 : 0.6
                         },
-                        disabled: !actionInput.trim() || state.actionSymbols.length >= NQR_ACTIONS_LIMIT
+                        disabled: !actionInput.trim() || (state.actionSymbols || []).length >= NQR_ACTIONS_LIMIT
                     }, "Add")
                 ),
                 React.createElement("div", { style: { margin: "20px 0 0 0", display: "flex", justifyContent: "flex-end" } },
@@ -915,6 +971,8 @@ function NQRSettingsPanel({ plugin, onClose }) {
         )
     );
 }
+
+/* -------------------- Plugin class -------------------- */
 
 module.exports = class NotificationQuickReply {
     constructor(meta) {
@@ -951,8 +1009,6 @@ module.exports = class NotificationQuickReply {
             if (!event?.message) return;
             this.msgHandler(event);
         });
-
-        // Always clear notification when that message is read (regardless of where)
         MsgDispatcher.subscribe("MESSAGE_ACK", this.msgAckSub = (event) => {
             const toClear = this.openAlerts.filter(alert =>
                 alert.chanId === event.channelId
@@ -965,8 +1021,6 @@ module.exports = class NotificationQuickReply {
                 });
             }
         });
-
-        // Clear notification when a thread is opened
         this._lastChannelId = SelectedChannelStore.getChannelId && SelectedChannelStore.getChannelId();
         this._channelChangeListener = () => {
             const currentId = SelectedChannelStore.getChannelId && SelectedChannelStore.getChannelId();
@@ -981,7 +1035,6 @@ module.exports = class NotificationQuickReply {
         };
         if (SelectedChannelStore.addChangeListener)
             SelectedChannelStore.addChangeListener(this._channelChangeListener);
-
         BdApi.DOM.addStyle("NQRStyles", this.nqrCss);
         BdApi.DOM.addStyle("NQRQuickReply", `
             .ping-notification-quickreply-wrapper {
@@ -1033,25 +1086,43 @@ module.exports = class NotificationQuickReply {
     async spawnAlertBox(msgEvt, chanObj, notifyResult) {
         const alertDiv = BdApi.DOM.createElement('div', {
             className: 'ping-notification',
-            'data-channel-id': chanObj.id
+            'data-channel-id': chanObj && chanObj.id ? chanObj.id : (msgEvt && msgEvt.channel_id) || '0'
         });
         if (this.nqrUserSettings.alertAnchor && this.nqrUserSettings.alertAnchor.endsWith("Mid")) {
             alertDiv.classList.add('centre');
         }
-        let msgObj = MessageDB.getMessage(chanObj.id, msgEvt.id);
+        let msgObj = null;
+        try {
+            msgObj = (chanObj && MessageDB.getMessage && MessageDB.getMessage(chanObj.id, msgEvt.id)) || null;
+        } catch (e) { msgObj = null; }
         if (!msgObj) {
-            msgObj = msgStructFactory(msgEvt);
-            cacheMsg(msgObj);
+            try {
+                msgObj = msgStructFactory ? msgStructFactory(msgEvt) : msgEvt;
+                if (msgObj && msgObj.id && msgObj.channel_id) cacheMsg(msgObj);
+            } catch (e) {
+                msgObj = msgEvt;
+            }
         }
         alertDiv.creationTime = Date.now();
-        alertDiv.chanId = chanObj.id;
-        alertDiv.msgId = msgObj.id;
+        alertDiv.chanId = chanObj && chanObj.id ? chanObj.id : (msgEvt && msgEvt.channel_id) || '0';
+        alertDiv.msgId = msgObj && msgObj.id ? msgObj.id : (msgEvt && msgEvt.id) || '0';
         alertDiv.msgObj = msgObj;
         alertDiv.keywordFlag = false;
         alertDiv.matchedWord = null;
-        const isTest = msgObj.id === "0";
+        const isTest = Boolean(notifyResult && notifyResult.test) || (msgObj && msgObj.id === "0");
         alertDiv.isTest = isTest;
-        alertDiv.style.setProperty('--ping-notification-z-index', isTest ? '1003' : '1003');
+        alertDiv.style.setProperty('--ping-notification-z-index', isTest ? '2147483647' : '2147483647');
+        const fsElem = document.fullscreenElement;
+        try {
+            if (fsElem) {
+                fsElem.appendChild(alertDiv);
+            } else {
+                document.body.prepend(alertDiv);
+            }
+        } catch (e) {
+            console.error("NQR: failed to append alert container", e);
+            return null;
+        }
         let root;
         const settingsToPass = {
             duration: this.nqrUserSettings.alertLifetime * 1000,
@@ -1079,58 +1150,95 @@ module.exports = class NotificationQuickReply {
             timerColor: this.nqrUserSettings.timerColor,
             showServerGCProfilePic: this.nqrUserSettings.showServerGCProfilePic,
             showDMHeaderAvatar: this.nqrUserSettings.showDMHeaderAvatar,
+            backgroundColor: this.nqrUserSettings.backgroundColor,
+            isTest,
             onClose: (isManual) => {
                 alertDiv.manualClose = isManual;
                 this.clearAlertBox(alertDiv);
             },
             onClick: () => {
-                if (!isTest) {
+                if (!isTest && chanObj && msgObj) {
                     this.onAlertNav(chanObj, msgObj);
                 }
                 this.clearAlertBox(alertDiv);
             }
         };
-        if (ReactDOM.createRoot) {
-            root = createRoot(alertDiv);
-            root.render(React.createElement(NotificationComponent, props));
-            alertDiv.root = root;
-        } else {
-            ReactDOM.render(React.createElement(NotificationComponent, props), alertDiv);
-            alertDiv.root = { unmount: () => ReactDOM.unmountComponentAtNode(alertDiv) };
+        try {
+            if (createRoot) {
+                root = createRoot(alertDiv);
+                root.render(React.createElement(NotificationComponent, props));
+                alertDiv.root = root;
+            } else if (_ReactDOM && _ReactDOM.render) {
+                _ReactDOM.render(React.createElement(NotificationComponent, props), alertDiv);
+                alertDiv.root = { unmount: () => _ReactDOM.unmountComponentAtNode(alertDiv) };
+            } else {
+                console.error("NQR: no render method available");
+                try { if (alertDiv.parentNode) alertDiv.parentNode.removeChild(alertDiv); } catch (e) { /* noop */ }
+                return null;
+            }
+        } catch (err) {
+            console.error("NQR: failed to mount notification:", err);
+            try { if (alertDiv.parentNode) alertDiv.parentNode.removeChild(alertDiv); } catch (e) { /* noop */ }
+            return null;
         }
         this.openAlerts.push(alertDiv);
-        document.body.prepend(alertDiv);
         void alertDiv.offsetHeight;
         alertDiv.classList.add('show');
         requestAnimationFrame(() => {
             this.positionAlerts();
         });
-        const imgs = alertDiv.querySelectorAll('img');
-        imgs.forEach(img => {
+        const imgs = alertDiv.querySelectorAll && alertDiv.querySelectorAll('img');
+        imgs && imgs.forEach && imgs.forEach(img => {
             img.addEventListener('load', () => this.positionAlerts());
         });
         if ('ResizeObserver' in window) {
-            const ro = new ResizeObserver(() => this.positionAlerts());
-            ro.observe(alertDiv);
-            alertDiv._resizeObserver = ro;
+            try {
+                const ro = new ResizeObserver(() => this.positionAlerts());
+                ro.observe(alertDiv);
+                alertDiv._resizeObserver = ro;
+            } catch (e) { /* ignore */ }
         }
         return alertDiv;
     }
     clearAlertBox(alertDiv) {
-        if (alertDiv._resizeObserver) alertDiv._resizeObserver.disconnect();
-        if (document.body.contains(alertDiv)) {
-            alertDiv.root.unmount();
-            document.body.removeChild(alertDiv);
+        if (!alertDiv) return;
+        if (alertDiv._resizeObserver) try { alertDiv._resizeObserver.disconnect(); } catch (e) { /* noop */ }
+        if (alertDiv.parentNode) {
+            try {
+                const active = document.activeElement;
+                if (active && alertDiv.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+                    active.blur();
+                }
+            } catch (e) { /* best-effort */ }
+            try {
+                if (alertDiv.root && typeof alertDiv.root.unmount === "function") {
+                    alertDiv.root.unmount();
+                } else if (_ReactDOM && _ReactDOM.unmountComponentAtNode) {
+                    _ReactDOM.unmountComponentAtNode(alertDiv);
+                }
+            } catch (e) {
+                console.error("NQR: error during unmount", e);
+            }
+            try { alertDiv.parentNode.removeChild(alertDiv); } catch (e) { /* noop */ }
             this.openAlerts = this.openAlerts.filter(n => n !== alertDiv);
             this.positionAlerts();
         }
     }
     removeAllAlerts() {
         this.openAlerts.forEach(alert => {
-            if (alert._resizeObserver) alert._resizeObserver.disconnect();
-            if (document.body.contains(alert)) {
-                alert.root.unmount();
-                document.body.removeChild(alert);
+            if (alert._resizeObserver) try { alert._resizeObserver.disconnect(); } catch (e) { /* noop */ }
+            try {
+                const active = document.activeElement;
+                if (active && alert.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
+                    active.blur();
+                }
+            } catch (e) { /* best-effort */ }
+            if (alert.parentNode) {
+                try {
+                    if (alert.root && typeof alert.root.unmount === "function") alert.root.unmount();
+                    else if (_ReactDOM && _ReactDOM.unmountComponentAtNode) _ReactDOM.unmountComponentAtNode(alert);
+                } catch (e) { /* ignore */ }
+                try { alert.parentNode.removeChild(alert); } catch (e) { /* ignore */ }
             }
         });
         this.openAlerts = [];
@@ -1143,30 +1251,32 @@ module.exports = class NotificationQuickReply {
         const isCenter = anchor && anchor.endsWith("Mid");
         const sorted = [...this.openAlerts].sort((a, b) => b.creationTime - a.creationTime);
         sorted.forEach((alert) => {
-            const h = alert.offsetHeight;
-            alert.style.transition = 'all 0.1s cubic-bezier(.4,1,.7,1.2)';
-            alert.style.position = 'fixed';
-            if (isTop) {
-                alert.style.top = `${offset}px`;
-                alert.style.bottom = 'auto';
-            } else {
-                alert.style.bottom = `${offset}px`;
-                alert.style.top = 'auto';
-            }
-            if (isCenter) {
-                alert.style.left = '50%';
-                alert.style.right = 'auto';
-                alert.style.transform = 'translateX(-50%)';
-            } else if (isStart) {
-                alert.style.left = '20px';
-                alert.style.right = 'auto';
-                alert.style.transform = 'none';
-            } else {
-                alert.style.right = '20px';
-                alert.style.left = 'auto';
-                alert.style.transform = 'none';
-            }
-            offset += h + 10;
+            try {
+                const h = alert.offsetHeight;
+                alert.style.transition = 'all 0.1s cubic-bezier(.4,1,.7,1.2)';
+                alert.style.position = 'fixed';
+                if (isTop) {
+                    alert.style.top = `${offset}px`;
+                    alert.style.bottom = 'auto';
+                } else {
+                    alert.style.bottom = `${offset}px`;
+                    alert.style.top = 'auto';
+                }
+                if (isCenter) {
+                    alert.style.left = '50%';
+                    alert.style.right = 'auto';
+                    alert.style.transform = 'translateX(-50%)';
+                } else if (isStart) {
+                    alert.style.left = '20px';
+                    alert.style.right = 'auto';
+                    alert.style.transform = 'none';
+                } else {
+                    alert.style.right = '20px';
+                    alert.style.left = 'auto';
+                    alert.style.transform = 'none';
+                }
+                offset += h + 10;
+            } catch (e) { /* ignore layout errors */ }
         });
     }
     onAlertNav(chanObj, msgObj) {
@@ -1176,19 +1286,27 @@ module.exports = class NotificationQuickReply {
         toRemove.forEach(alert => {
             this.clearAlertBox(alert);
         });
-        navTo(`/channels/${chanObj.guild_id || "@me"}/${chanObj.id}/${msgObj.id}`);
+        try {
+            navTo(`/channels/${chanObj.guild_id || "@me"}/${chanObj.id}/${msgObj.id}`);
+        } catch (e) { /* may fail in some contexts */ }
     }
     getSettingsPanel() {
-        let panelRoot = document.createElement("div");
-        let root = createRoot(panelRoot);
-        let done = false;
-        let closePanel = () => {
-            if (!done) {
-                done = true;
-                setTimeout(() => root.unmount(), 20);
-            }
-        };
-        root.render(React.createElement(NQRSettingsPanel, { plugin: this, onClose: closePanel }));
+        const panelRoot = document.createElement("div");
+        if (createRoot) {
+            const root = createRoot(panelRoot);
+            root.render(React.createElement(NQRSettingsPanel, {
+                plugin: this,
+                onClose: () => {}
+            }));
+            // Return element directly not supported in some BD versions, wrapping in module.exports.getSettingsPanel usually expects an HTMLElement
+            return panelRoot;
+        } else if (_ReactDOM && _ReactDOM.render) {
+            _ReactDOM.render(React.createElement(NQRSettingsPanel, {
+                plugin: this,
+                onClose: () => {}
+            }), panelRoot);
+            return panelRoot;
+        }
         return panelRoot;
     }
     nqrCss = `
